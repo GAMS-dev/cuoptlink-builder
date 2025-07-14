@@ -37,3 +37,7 @@ Get an example model and explicitly choose `cuopt` as `lp` or `mip` solver:
 gamslib trnsport
 gams trnsport lp cuopt
 ```
+
+## Examples
+
+- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb)
