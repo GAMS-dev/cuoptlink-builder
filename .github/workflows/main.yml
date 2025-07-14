@@ -3,6 +3,8 @@ name: Build cuOpt link for GAMS
 on:
   push:
     branches: [main]
+    tags:
+      - '*'        # Run also when a tag is pushed
   pull_request:
 
 jobs:
@@ -44,16 +46,26 @@ jobs:
             -I $CUOPT/include $JITLINK/libnvJitLink.so.12 -L $CUOPT/lib64 -lcuopt
           patchelf --set-rpath \$ORIGIN gmscuopt.out
 
-      - name: Upload artifact
+      - name: Prepare release artifact
+        run: |
+          mkdir release
+          cp gmscuopt.out release/
+          cp assets/* release/
+          cp venvs/cu-opt/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so release/
+          cp venvs/cu-opt/lib/python3.12/site-packages/libcuopt/lib64/libmps_parser.so release/
+          cp venvs/cu-opt/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-5fc1ad8c.so.1.0.0 release/
+          cp venvs/cu-opt/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so release/
+
+      - name: Upload artifact to GitHub Actions (always)
         uses: actions/upload-artifact@v4
         with:
           name: cuopt-link
-          path: |
-            gmscuopt.out
-            assets/gmscuopt.run
-            assets/gamsconfig.yaml
-            assets/optcuopt.def
-            venvs/cu-opt/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so
-            venvs/cu-opt/lib/python3.12/site-packages/libcuopt/lib64/libmps_parser.so
-            venvs/cu-opt/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-5fc1ad8c.so.1.0.0
-            venvs/cu-opt/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so
+          path: release/
+
+      - name: Create GitHub Release (only on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
