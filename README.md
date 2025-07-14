@@ -2,7 +2,7 @@
 
 [![Build cuOpt link for GAMS](https://github.com/GAMS-dev/cuoptlink-builder/actions/workflows/main.yml/badge.svg)](https://github.com/GAMS-dev/cuoptlink-builder/actions/workflows/main.yml)
 
-This project builds and packages the [GAMS](https://gams.com/) solver link for the [NVIDIA cuOpt solver](https://github.com/NVIDIA/cuopt).
+This project builds and packages the [GAMS](https://gams.com/) and [GAMSPy](https://gamspy.readthedocs.io/en/latest/index.html) solver link for the [NVIDIA cuOpt solver](https://github.com/NVIDIA/cuopt).
 
 ## Requirements
 
