@@ -1,0 +1,12 @@
+solverConfig:
+  - cuopt:
+      minVersion: 49
+      fileType: 1001
+      dictType: 0
+      licCodes: 000102030405
+      scriptName: gmscuopt.run
+      executableName: gmscuopt.out
+      modelTypes:
+        - LP
+        - RMIP
+        - MIP

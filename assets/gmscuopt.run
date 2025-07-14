@@ -1,0 +1,8 @@
+#!/bin/sh
+# $1 scratch directory
+# $2 working directory
+# $3 gamsparm file for restarting GAMS
+# $4 control file
+# $5 system directory
+# $6 solver
+"${5}gmscuopt.out" "${4}"
