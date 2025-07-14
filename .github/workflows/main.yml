@@ -1,0 +1,51 @@
+name: Build cuOpt link for GAMS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-link:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install -y patchelf curl unzip gcc
+
+      - name: Set up python virtual environment with NVIDIA dependencies
+        run: |
+          mkdir -p venvs
+          python -m venv venvs/cu-opt
+          source venvs/cu-opt/bin/activate
+          pip install --upgrade pip -qq
+          pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu12==25.5.* nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12 -qq
+
+      - name: Download and extract GAMS distribution 50.1
+        run: |
+          curl https://d37drm4t2jghv5.cloudfront.net/distributions/50.1.0/linux/linux_x64_64_sfx.exe --output linux_x64_64_sfx.exe
+          unzip -q linux_x64_64_sfx.exe
+          mv gams*_linux_x64_64_sfx gamsdist
+          rm linux_x64_64_sfx.exe
+
+      - name: Compile gmscuopt
+        run: |
+          export GAMSCAPI="gamsdist/apifiles/C/api"
+          export CUOPT="venvs/cu-opt/lib/python3.12/site-packages/libcuopt"
+          export JITLINK="venvs/cu-opt/lib/python3.12/site-packages/nvidia/nvjitlink/lib"
+          gcc -Wall gmscuopt.c -o gmscuopt.out \
+            -I $GAMSCAPI $GAMSCAPI/gmomcc.c $GAMSCAPI/optcc.c $GAMSCAPI/gevmcc.c \
+            -I $CUOPT/include $JITLINK/libnvJitLink.so.12 -L $CUOPT/lib64 -lcuopt
+          patchelf --set-rpath \$ORIGIN gmscuopt.out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuopt-link
+          path: gmscuopt.out
