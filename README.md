@@ -19,6 +19,17 @@ This project builds and packages the GAMS link for the NVIDIA cuOpt solver.
     - Unpack the contents of `cuopt-link-release.zip` into your GAMS system directory.
     - **Caution:** This will overwrite any existing `gamsconfig.yaml` file in that directory. The contained `gamsconfig.yaml` contains a `solverConfig` section to make cuOpt available to GAMS.
 
+More specifically, the files from the CUDA runtime needed are
+```
+libnvJitLink.so.12
+libcusolver.so.11
+libcurand.so.10
+libcusparse.so.12
+libcublasLt.so.12
+libcublas.so.12
+```
+and can be installed e.g. via `pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu12==25.5.* nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12` into a Python environment.
+
 ## Test the setup
 
 Get an example model and explicitly choose `cuopt` as `lp` or `mip` solver:
