@@ -48,4 +48,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cuopt-link
-          path: gmscuopt.out
+          path: |
+            gmscuopt.out
+            assets/gmscuopt.run
+            assets/gamsconfig.yaml
+            assets/optcuopt.def
+            venvs/cu-opt/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so
+            venvs/cu-opt/lib/python3.12/site-packages/libcuopt/lib64/libmps_parser.so
+            venvs/cu-opt/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-5fc1ad8c.so.1.0.0
+            venvs/cu-opt/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so
