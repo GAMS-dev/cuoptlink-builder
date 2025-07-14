@@ -16,7 +16,7 @@ This project builds and packages the [GAMS](https://gams.com/) and [GAMSPy](http
 
 - Make sure [CUDA runtime](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64) is installed
 - Download and unpack `cuopt-link-release.zip` from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases):
-    - Unpack the contents of `cuopt-link-release.zip` into your GAMS system directory. For GAMSPy, you can find out your system directory by running `gamspy show base`. So for example you can run `unzip -o cuopt-link-release.zip -d ``gamspy show base`` `.
+    - Unpack the contents of `cuopt-link-release.zip` into your GAMS system directory. For GAMSPy, you can find out your system directory by running `gamspy show base`. So for example you can run `unzip -o cuopt-link-release.zip -d `gamspy show base` `.
     - **Caution:** This will overwrite any existing `gamsconfig.yaml` file in that directory. The contained `gamsconfig.yaml` contains a `solverConfig` section to make cuOpt available to GAMS.
 
 More specifically, the files from the CUDA runtime needed are
