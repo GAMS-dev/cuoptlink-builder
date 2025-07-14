@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install -y patchelf curl unzip gcc
+          apt-get update && apt-get install -y patchelf curl unzip zip gcc
 
       - name: Set up python virtual environment with NVIDIA dependencies
         run: |
