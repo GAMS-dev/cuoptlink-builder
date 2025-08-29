@@ -29,9 +29,9 @@ jobs:
             pip install --upgrade pip -qq && \
             pip install --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu12==25.10.0a47 nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12 -qq"
 
-      - name: Download and extract GAMS distribution 50.1
+      - name: Download and extract latest GAMS distribution
         run: |
-          curl https://d37drm4t2jghv5.cloudfront.net/distributions/50.4.0/linux/linux_x64_64_sfx.exe --output linux_x64_64_sfx.exe
+          curl https://d37drm4t2jghv5.cloudfront.net/distributions/latest/linux/linux_x64_64_sfx.exe --output linux_x64_64_sfx.exe
           unzip -q linux_x64_64_sfx.exe
           mv gams*_linux_x64_64_sfx gamsdist
           rm linux_x64_64_sfx.exe
