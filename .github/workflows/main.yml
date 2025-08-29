@@ -2,7 +2,7 @@ name: Build cuOpt link for GAMS
 
 on:
   push:
-    branches: [main]
+#    branches: [main]
     tags:
       - '*'        # Run also when a tag is pushed
   pull_request:
