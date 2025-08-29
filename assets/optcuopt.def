@@ -1,6 +1,7 @@
 *
 * optcuopt.def
 *
+presolve boolean 0 0 1 1 Controls if presolve should be enabled. Off by default for LP and on by default for MIPs
 num_cpu_threads integer 0 -1 -1 maxint 1 1 Controls the number of CPU threads used in the LP and MIP solvers (default GAMS Threads)
 time_limit integer 0 maxint 0 maxint 1 1 Controls the time limit in seconds after which the solver will stop and return the current solution (default GAMS ResLim)
 prob_read string 1 "" 1 1 Reads a problem from an MPS file 
