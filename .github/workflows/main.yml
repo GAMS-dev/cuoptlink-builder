@@ -31,7 +31,7 @@ jobs:
 
       - name: Download and extract GAMS distribution 50.1
         run: |
-          curl https://d37drm4t2jghv5.cloudfront.net/distributions/50.1.0/linux/linux_x64_64_sfx.exe --output linux_x64_64_sfx.exe
+          curl https://d37drm4t2jghv5.cloudfront.net/distributions/50.4.0/linux/linux_x64_64_sfx.exe --output linux_x64_64_sfx.exe
           unzip -q linux_x64_64_sfx.exe
           mv gams*_linux_x64_64_sfx gamsdist
           rm linux_x64_64_sfx.exe
