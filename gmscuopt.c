@@ -424,7 +424,9 @@ main (int argc, char *argv[])
     }
     gmoSetVarL(gmo, objective_coefficients);
 
-    if (gmoModelType(gmo) != gmoProc_mip) {
+    int presolve;
+    cuOptGetIntegerParameter(settings, "presolve", &presolve);
+    if (gmoModelType(gmo) != gmoProc_mip && !presolve) {
       status = cuOptGetReducedCosts(solution, objective_coefficients); // reuse n-vector
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error getting reduced cost: %d\n", status);
@@ -445,24 +447,6 @@ main (int argc, char *argv[])
       if (gmoSense(gmo) == gmoObj_Max) { // patch duals for max problem
         for (int i=0; i<num_constraints; i++) {
           rhs[i] *= -1.0;
-        }
-      }
-      int patchSimplex = 0;
-      if (optGetIntStr(opt, "method") == 0) { // concurrent mode, grep the log for "Solved with dual simplex"
-        char cmd[256];
-        strcpy(cmd, "grep -q \"Solved with dual simplex\" ");
-        strcat(cmd, logfilename);
-        if (system(cmd) == 0) {
-          patchSimplex = 1;
-        } 
-      } else if (optGetIntStr(opt, "method") == 2) {
-        patchSimplex = 1;
-      }
-      if (patchSimplex == 1) { // toggle sign for >= constraints
-        for (int i=0; i<num_constraints; i++) {
-          if (constraint_sense[i] == CUOPT_GREATER_THAN) {
-            rhs[i] *= -1.0;
-          }
         }
       }
       gmoSetEquM(gmo, rhs);
