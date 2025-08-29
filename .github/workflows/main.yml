@@ -27,7 +27,7 @@ jobs:
           python -m venv venvs/cu-opt
           bash -c "source venvs/cu-opt/bin/activate && \
             pip install --upgrade pip -qq && \
-            pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu12==25.5.* nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12 -qq"
+            pip install --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu12==25.10.0a47 nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12 -qq"
 
       - name: Download and extract GAMS distribution 50.1
         run: |
