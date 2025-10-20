@@ -51,6 +51,10 @@ main (int argc, char *argv[])
     goto GAMSDONE;
   }
 
+#if defined(CUOPT_VERSION) && defined(CUOPT_HASH)
+  printOut(gev, "GAMS/cuOpt link was built against cuOpt version: %s, git hash: %s\n", CUOPT_VERSION, CUOPT_HASH);
+#endif
+
   status = gmoRegisterEnvironment(gmo, gev, msg);
   if (status) {
     printOut(gev, "Could not register GEV: %s\n", msg);
