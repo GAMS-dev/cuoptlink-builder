@@ -51,6 +51,10 @@ main (int argc, char *argv[])
     goto GAMSDONE;
   }
 
+#if defined(CUOPT_VERSION) && defined(CUOPT_HASH)
+  printOut(gev, "cuOpt version=%s (%s)\n", CUOPT_VERSION, CUOPT_HASH);
+#endif
+
   status = gmoRegisterEnvironment(gmo, gev, msg);
   if (status) {
     printOut(gev, "Could not register GEV: %s\n", msg);
