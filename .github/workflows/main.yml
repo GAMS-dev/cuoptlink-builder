@@ -44,7 +44,7 @@ jobs:
           export CUOPT_VERSION="`cat "$CUOPT/VERSION"`"
           export CUOPT_HASH="`cat "$CUOPT/GIT_COMMIT"`"
           gcc -Wall gmscuopt.c -o gmscuopt.out \
-            -DCUOPT_VERSION=$CUOPT_VERSION -DCUOPT_HASH=$CUOPT_HASH \
+            -DCUOPT_VERSION="$CUOPT_VERSION" -DCUOPT_HASH="$CUOPT_HASH" \
             -I $GAMSCAPI $GAMSCAPI/gmomcc.c $GAMSCAPI/optcc.c $GAMSCAPI/gevmcc.c \
             -I $CUOPT/include $JITLINK/libnvJitLink.so.12 -L $CUOPT/lib64 -lcuopt
           patchelf --set-rpath \$ORIGIN gmscuopt.out
