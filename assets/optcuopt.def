@@ -6,7 +6,7 @@ user_problem_file string 1 "" 1 1 Controls the name of a file where cuOpt should
 num_cpu_threads integer 0 -1 -1 maxint 1 1 Controls the number of CPU threads used in the LP and MIP solvers (default GAMS Threads)
 time_limit integer 0 maxint 0 maxint 1 1 Controls the time limit in seconds after which the solver will stop and return the current solution (default GAMS ResLim)
 prob_read string 1 "" 1 1 Reads a problem from an MPS file 
-pdlp_solver_mode enumint 0 1 1 2 Controls the mode under which PDLP should operate
+pdlp_solver_mode enumint 0 4 1 2 Controls the mode under which PDLP should operate
  0 1 stable1
  1 1 stable2
  2 1 methodical1
