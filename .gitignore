@@ -1,1 +1,5 @@
 /venv/*
+/release/*
+trnsport.gms
+trnsport.lst
+gmscuopt.out
