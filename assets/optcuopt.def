@@ -32,23 +32,23 @@ per_constraint_residual boolean 0 0 1 2 Controls whether PDLP should compute the
 save_best_primal_so_far boolean 0 0 1 2 Controls whether PDLP should save the best primal solution so far   
 first_primal_feasible boolean 0 0 1 2 Controls whether PDLP should stop when the first primal feasible solution is found     
 crossover boolean 0 0 1 2 Controls whether PDLP should crossover to a basic solution after an optimal solution is found                  
-folding enumint -1 1 1 2 Controls whether to fold the linear program. Folding can reduce problem size by exploiting symmetry in the problem
+folding enumint 0 -1 1 2 Controls whether to fold the linear program. Folding can reduce problem size by exploiting symmetry in the problem
  -1 1 automatic (default) cuOpt decides whether to fold based on problem characteristics
  0 1 disable folding
  1 1 force folding to run
-augmented enumint -1 1 1 2 Controls which linear system to solve in the barrier method
+augmented enumint 0 -1 1 2 Controls which linear system to solve in the barrier method
  -1 1 automatic (default) cuOpt selects the best linear system to solve
  0 1 solve the ADAT system (normal equations)
  1 1 solve the augmented system
-dualize enumint -1 1 1 2 Controls whether to dualize the linear program in presolve. Dualizing can improve solve time for problems, with inequality constraints, where there are more constraints than variables.
+dualize enumint 0 -1 1 2 Controls whether to dualize the linear program in presolve. Dualizing can improve solve time for problems, with inequality constraints, where there are more constraints than variables.
  -1 1 automatic (default) cuOpt decides whether to dualize based on problem characteristics
  0 1 don't attempt to dualize
  1 1 force dualize
-ordering enumint -1 1 1 2 Controls the ordering algorithm used by cuDSS for sparse factorizations. The ordering can significantly impact solver run time
+ordering enumint 0 -1 1 2 Controls the ordering algorithm used by cuDSS for sparse factorizations. The ordering can significantly impact solver run time
  -1 1 automatic (default) cuOpt selects the best ordering
  0 1 cuDSS default ordering
  1 1 AMD (approximate minimum degree) ordering
-barrier_dual_initial_point enumint -1 1 1 2 Controls the method used to compute the dual initial point for the barrier solver. The choice of initial point will affect the number of iterations performed by barrier
+barrier_dual_initial_point enumint 0 -1 1 2 Controls the method used to compute the dual initial point for the barrier solver. The choice of initial point will affect the number of iterations performed by barrier
  -1 1 automatic (default) cuOpt selects the best method
  0 1 use an initial point from a heuristic approach based on the paper "On Implementing Mehrotra’s Predictor–Corrector Interior-Point Method for Linear Programming" (SIAM J. Optimization, 1992) by Lustig, Martsten, Shanno.
  1 1 use an initial point from solving a least squares problem that minimizes the norms of the dual variables and reduced costs while statisfying the dual equality constraints.
