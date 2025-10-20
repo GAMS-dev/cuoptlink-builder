@@ -56,7 +56,7 @@ jobs:
           cp assets/* release/
           cp venvs/cu12/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so release/
           cp venvs/cu12/lib/python3.12/site-packages/libcuopt/lib64/libmps_parser.so release/
-          cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-5fc1ad8c.so.1.0.0 release/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-*.so.1.0.0 release/
           cp venvs/cu12/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so release/
           cp venvs/cu12/lib/python3.12/site-packages/librmm/lib64/librmm.so release/
 
