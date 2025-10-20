@@ -48,7 +48,10 @@ ordering enumint -1 1 1 2 Controls the ordering algorithm used by cuDSS for spar
  -1 1 automatic (default) cuOpt selects the best ordering
  0 1 cuDSS default ordering
  1 1 AMD (approximate minimum degree) ordering
-barrier_dual_initial_point boolean 0 0 1 2 Controls the method used to compute the dual initial point for the barrier solver. The choice of initial point will affect the number of iterations performed by barrier
+barrier_dual_initial_point enumint -1 1 1 2 Controls the method used to compute the dual initial point for the barrier solver. The choice of initial point will affect the number of iterations performed by barrier
+ -1 1 automatic (default) cuOpt selects the best method
+ 0 1 use an initial point from a heuristic approach based on the paper "On Implementing Mehrotra’s Predictor–Corrector Interior-Point Method for Linear Programming" (SIAM J. Optimization, 1992) by Lustig, Martsten, Shanno.
+ 1 1 use an initial point from solving a least squares problem that minimizes the norms of the dual variables and reduced costs while statisfying the dual equality constraints.
 eliminate_dense_columns boolean 1 0 1 2 Controls whether to eliminate dense columns from the constraint matrix before solving. Eliminating dense columns can improve performance by reducing fill-in during factorization. However, extra solves must be performed at each iteration
 cudss_deterministic boolean 0 0 1 2 Controls whether cuDSS operates in deterministic mode. Deterministic mode ensures reproducible results across runs but may be slower
 presolve boolean 0 0 1 1 Controls whether presolve is enabled. Presolve can reduce problem size and improve solve time. Enabled by default for MIP, disabled by default for LP.
