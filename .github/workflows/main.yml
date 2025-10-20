@@ -24,10 +24,10 @@ jobs:
       - name: Set up python virtual environment with NVIDIA dependencies
         run: |
           mkdir -p venvs
-          python -m venv venvs/cu-opt
-          bash -c "source venvs/cu-opt/bin/activate && \
+          python -m venv venvs/cu12
+          bash -c "source venvs/cu12/bin/activate && \
             pip install --upgrade pip -qq && \
-            pip install --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu12==25.10.0a47 nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12 -qq"
+            pip install --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu12==25.10.0 nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12 -qq"
 
       - name: Download and extract latest GAMS distribution
         run: |
@@ -39,8 +39,8 @@ jobs:
       - name: Compile gmscuopt
         run: |
           export GAMSCAPI="gamsdist/apifiles/C/api"
-          export CUOPT="venvs/cu-opt/lib/python3.12/site-packages/libcuopt"
-          export JITLINK="venvs/cu-opt/lib/python3.12/site-packages/nvidia/nvjitlink/lib"
+          export CUOPT="venvs/cu12/lib/python3.12/site-packages/libcuopt"
+          export JITLINK="venvs/cu12/lib/python3.12/site-packages/nvidia/nvjitlink/lib"
           gcc -Wall gmscuopt.c -o gmscuopt.out \
             -I $GAMSCAPI $GAMSCAPI/gmomcc.c $GAMSCAPI/optcc.c $GAMSCAPI/gevmcc.c \
             -I $CUOPT/include $JITLINK/libnvJitLink.so.12 -L $CUOPT/lib64 -lcuopt
@@ -51,11 +51,11 @@ jobs:
           mkdir release
           cp gmscuopt.out release/
           cp assets/* release/
-          cp venvs/cu-opt/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so release/
-          cp venvs/cu-opt/lib/python3.12/site-packages/libcuopt/lib64/libmps_parser.so release/
-          cp venvs/cu-opt/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-5fc1ad8c.so.1.0.0 release/
-          cp venvs/cu-opt/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so release/
-          cp venvs/cu-opt/lib/python3.12/site-packages/librmm/lib64/librmm.so release/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so release/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt/lib64/libmps_parser.so release/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-5fc1ad8c.so.1.0.0 release/
+          cp venvs/cu12/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so release/
+          cp venvs/cu12/lib/python3.12/site-packages/librmm/lib64/librmm.so release/
 
       - name: Upload artifact to GitHub Actions (always)
         uses: actions/upload-artifact@v4
