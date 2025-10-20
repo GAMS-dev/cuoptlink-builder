@@ -1,16 +1,17 @@
 *
 * optcuopt.def
 *
-presolve boolean 0 0 1 1 Controls whether presolve is enabled. Presolve can reduce problem size and improve solve time. Enabled by default for MIP, disabled by default for LP.
+solution_file string 1 "" 1 1 Controls the name of a file where cuOpt should write the solution
+user_problem_file string 1 "" 1 1 Controls the name of a file where cuOpt should write the user problem
 num_cpu_threads integer 0 -1 -1 maxint 1 1 Controls the number of CPU threads used in the LP and MIP solvers (default GAMS Threads)
 time_limit integer 0 maxint 0 maxint 1 1 Controls the time limit in seconds after which the solver will stop and return the current solution (default GAMS ResLim)
 prob_read string 1 "" 1 1 Reads a problem from an MPS file 
 pdlp_solver_mode enumint 0 1 1 2 Controls the mode under which PDLP should operate
  0 1 stable1
  1 1 stable2
- 2 1 stable3
- 3 1 methodical1
- 4 1 fast1
+ 2 1 methodical1
+ 3 1 fast1
+ 4 1 stable3
 method enumint 0 0 1 2 Controls the method to solve the linear programming problem
  0 1 concurrent
  1 1 pdlp
@@ -31,6 +32,27 @@ per_constraint_residual boolean 0 0 1 2 Controls whether PDLP should compute the
 save_best_primal_so_far boolean 0 0 1 2 Controls whether PDLP should save the best primal solution so far   
 first_primal_feasible boolean 0 0 1 2 Controls whether PDLP should stop when the first primal feasible solution is found     
 crossover boolean 0 0 1 2 Controls whether PDLP should crossover to a basic solution after an optimal solution is found                  
+folding enumint -1 1 1 2 Controls whether to fold the linear program. Folding can reduce problem size by exploiting symmetry in the problem
+ -1 1 automatic (default) cuOpt decides whether to fold based on problem characteristics
+ 0 1 disable folding
+ 1 1 force folding to run
+augmented enumint -1 1 1 2 Controls which linear system to solve in the barrier method
+ -1 1 automatic (default) cuOpt selects the best linear system to solve
+ 0 1 solve the ADAT system (normal equations)
+ 1 1 solve the augmented system
+dualize enumint -1 1 1 2 Controls whether to dualize the linear program in presolve. Dualizing can improve solve time for problems, with inequality constraints, where there are more constraints than variables.
+ -1 1 automatic (default) cuOpt decides whether to dualize based on problem characteristics
+ 0 1 don't attempt to dualize
+ 1 1 force dualize
+ordering enumint -1 1 1 2 Controls the ordering algorithm used by cuDSS for sparse factorizations. The ordering can significantly impact solver run time
+ -1 1 automatic (default) cuOpt selects the best ordering
+ 0 1 cuDSS default ordering
+ 1 1 AMD (approximate minimum degree) ordering
+barrier_dual_initial_point boolean 0 0 1 2 Controls the method used to compute the dual initial point for the barrier solver. The choice of initial point will affect the number of iterations performed by barrier
+eliminate_dense_columns boolean 1 0 1 2 Controls whether to eliminate dense columns from the constraint matrix before solving. Eliminating dense columns can improve performance by reducing fill-in during factorization. However, extra solves must be performed at each iteration
+cudss_deterministic boolean 0 0 1 2 Controls whether cuDSS operates in deterministic mode. Deterministic mode ensures reproducible results across runs but may be slower
+presolve boolean 0 0 1 1 Controls whether presolve is enabled. Presolve can reduce problem size and improve solve time. Enabled by default for MIP, disabled by default for LP.
+dual_postsolve boolean 1 0 1 2 Controls whether dual postsolve is enabled. Disabling dual postsolve can improve solve time at the expense of not having access to the dual solution. Enabled by default for LP when presolve is enabled. This is not relevant for MIP problems
 mip_absolute_tolerance double 0 0.0001 0 maxdouble 1 3 Controls the MIP absolute tolerance
 mip_relative_tolerance double 0 0.0001 0 maxdouble 1 3 Controls the MIP relative tolerance
 mip_integrality_tolerance double 0 1e-05 0 maxdouble 1 3 Controls the MIP integrality tolerance
@@ -38,7 +60,6 @@ mip_absolute_gap double 0 1e-10 0 maxdouble 1 3 Controls the absolute tolerance 
 mip_relative_gap double 0 1e-5 0 maxdouble 1 3 Controls the relative tolerance used to terminate the MIP solve (default GAMS OptCR)
 mip_scaling boolean 0 1 1 3 Controls if scaling should be applied to the MIP problem               
 mip_heuristics_only boolean 0 0 1 3 Controls if only the GPU heuristics should be run       
-barrier_dual_initial_point boolean 0 0 1 2 Controls the method used to compute the dual initial point for the barrier solver. The choice of initial point will affect the number of iterations performed by barrier
 *
 * Groups
 *
