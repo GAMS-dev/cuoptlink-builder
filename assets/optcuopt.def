@@ -5,15 +5,17 @@ presolve boolean 0 0 1 1 Controls whether presolve is enabled. Presolve can redu
 num_cpu_threads integer 0 -1 -1 maxint 1 1 Controls the number of CPU threads used in the LP and MIP solvers (default GAMS Threads)
 time_limit integer 0 maxint 0 maxint 1 1 Controls the time limit in seconds after which the solver will stop and return the current solution (default GAMS ResLim)
 prob_read string 1 "" 1 1 Reads a problem from an MPS file 
-pdlp_solver_mode enumint 0 1 1 2 Controls the mode under which PDLP should operate
+pdlp_solver_mode enumint 0 1 1 4 Controls the mode under which PDLP should operate
  0 1 stable1
  1 1 stable2
- 2 1 methodical1
- 3 1 fast1
-method enumint 0 0 1 2 Controls the method to solve the linear programming problem
+ 2 1 stable3
+ 3 1 methodical1
+ 4 1 fast1
+method enumint 0 0 1 3 Controls the method to solve the linear programming problem
  0 1 concurrent
  1 1 pdlp
  2 1 dual_simplex
+ 3 1 method_barrier
 iteration_limit integer 0 maxint 0 maxint 1 2 Controls the iteration limit after which the solver will stop and return the current solution (default GAMS IterLim)
 absolute_dual_tolerance double 0 0.0001 0 maxdouble 1 2 Controls the absolute dual tolerance used in PDLP's dual feasibility check
 relative_dual_tolerance double 0 0.0001 0 maxdouble 1 2 Controls the relative dual tolerance used in PDLP's dual feasibility check
