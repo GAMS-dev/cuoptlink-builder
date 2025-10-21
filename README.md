@@ -9,7 +9,7 @@ You can get more details and tips by reading the blog post ["GPU-Accelerated Opt
 ## Requirements
 
 - **Operating System:** Linux, Windows 11 through WSL2
-- **GAMS:** Version 49 or newer.
+- **GAMS:** Version 49 or newer
 - **GAMSPy:** Version 1.12.1 or newer
 - **NVIDIA GPU:** Volta architecture or better
 - **CUDA Runtime Libraries:** 12 or 13
