@@ -100,11 +100,11 @@ jobs:
           cp venvs/cu13/lib/python3.12/site-packages/librmm/lib64/librmm.so release-cu13/
           mkdir runtime-cu13
           cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libcudss.so.0 runtime-cu13/
-          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cusolver/lib/libcusolver.so.12 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libnvJitLink.so.13 runtime-cu13/
           cp venvs/cu13/lib/python3.12/site-packages/nvidia/cublas/lib/libcublas.so.13 runtime-cu13/
           cp venvs/cu13/lib/python3.12/site-packages/nvidia/cublas/lib/libcublasLt.so.13 runtime-cu13/
-          cp venvs/cu13/lib/python3.12/site-packages/nvidia/nvjitlink/lib/libnvJitLink.so.13 runtime-cu13/
           cp venvs/cu13/lib/python3.12/site-packages/nvidia/curand/lib/libcurand.so.10 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cusolver/lib/libcusolver.so.12 runtime-cu13/
           cp venvs/cu13/lib/python3.12/site-packages/nvidia/cusparse/lib/libcusparse.so.12 runtime-cu13/
 
       # Upload artifacts
