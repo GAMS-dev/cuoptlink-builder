@@ -4,9 +4,11 @@
 
 This project builds and packages the [GAMS](https://gams.com/) and [GAMSPy](https://gamspy.readthedocs.io/en/latest/index.html) solver link for the [NVIDIA cuOpt solver](https://github.com/NVIDIA/cuopt).
 
+You can get more details and tips by reading the blog post ["GPU-Accelerated Optimization with GAMS and NVIDIA cuOpt"](https://www.gams.com/blog/2025/09/gpu-accelerated-optimization-with-gams-and-nvidia-cuopt/).
+
 ## Requirements
 
-- **Operating System:** Linux
+- **Operating System:** Linux, Windows through WSL2
 - **GAMS:** Version 49 or newer.
 - **GAMSPy:** Version 1.12.1 or newer
 - **NVIDIA GPU:** Volta architecture or better
