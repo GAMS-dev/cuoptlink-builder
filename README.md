@@ -12,7 +12,7 @@ You can get more details and tips by reading the blog post ["GPU-Accelerated Opt
 - **GAMS:** Version 49 or newer.
 - **GAMSPy:** Version 1.12.1 or newer
 - **NVIDIA GPU:** Volta architecture or better
-- **CUDA Runtime Libraries:** 12 and 13
+- **CUDA Runtime Libraries:** 12 or 13
 
 ## Getting started / installation
 
