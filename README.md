@@ -8,29 +8,20 @@ You can get more details and tips by reading the blog post ["GPU-Accelerated Opt
 
 ## Requirements
 
-- **Operating System:** Linux, Windows through WSL2
+- **Operating System:** Linux, Windows 11 through WSL2
 - **GAMS:** Version 49 or newer.
 - **GAMSPy:** Version 1.12.1 or newer
 - **NVIDIA GPU:** Volta architecture or better
-- **CUDA Runtime Libraries:** 12.0+
+- **CUDA Runtime Libraries:** 12 and 13
 
 ## Getting started / installation
 
 - Make sure [CUDA runtime](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64) is installed
-- Download and unpack `cuopt-link-release.zip` from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases):
-    - Unpack the contents of `cuopt-link-release.zip` into your GAMS system directory. For GAMSPy, you can find out your system directory by running `gamspy show base`. So for example you can run `unzip -o cuopt-link-release.zip -d $(gamspy show base)`.
+- Download and unpack `cuopt-link-release-cu12.zip` or `cuopt-link-release-cu13.zip` (for CUDA 12 and 13 respectively) from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases):
+    - Unpack the contents of `cuopt-link-release-cu*.zip` into your GAMS system directory. For GAMSPy, you can find out your system directory by running `gamspy show base`. So for example you can run `unzip -o cuopt-link-release-cu*.zip -d $(gamspy show base)`.
     - **Caution:** This will overwrite any existing `gamsconfig.yaml` file in that directory. The contained `gamsconfig.yaml` contains a `solverConfig` section to make cuOpt available to GAMS.
 
-More specifically, the files from the CUDA runtime needed are
-```
-libcublas.so.12
-libcublasLt.so.12
-libcudss.so.0
-libcurand.so.10
-libcusolver.so.11
-libnvJitLink.so.12
-```
-and can be installed e.g. via `pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu12==25.5.* nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12` into a Python environment or downloaded as archive `cu12-runtime.zip` from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases).
+The neccessary files from the CUDA 12 or 13 runtime can also be downloaded as convenient archive `cu12-runtime.zip` or `cu13-runtime.zip` from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases).
 
 ## Test the setup
 
@@ -42,4 +33,5 @@ gams trnsport lp cuopt
 
 ## Examples
 
-- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb)
+- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb) for CUDA 12
+- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt_cu13.ipynb) for CUDA 13
