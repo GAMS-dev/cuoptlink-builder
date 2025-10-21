@@ -428,9 +428,10 @@ main (int argc, char *argv[])
     }
     gmoSetVarL(gmo, objective_coefficients);
 
-    int presolve;
+    int presolve, dual_postsolve;
     cuOptGetIntegerParameter(settings, "presolve", &presolve);
-    if (gmoModelType(gmo) != gmoProc_mip && !presolve) {
+    cuOptGetIntegerParameter(settings, "dual_postsolve", &dual_postsolve);
+    if (gmoModelType(gmo) != gmoProc_mip && (!presolve || dual_postsolve) ) {
       status = cuOptGetReducedCosts(solution, objective_coefficients); // reuse n-vector
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error getting reduced cost: %d\n", status);
