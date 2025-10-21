@@ -58,7 +58,7 @@ jobs:
             -I $CUOPT/include $JITLINK/libnvJitLink.so.12 -L $CUOPT/lib64 -lcuopt
           patchelf --set-rpath \$ORIGIN gmscuopt-cu12.out
           export CUOPT="venvs/cu13/lib/python3.12/site-packages/libcuopt"
-          export JITLINK="venvs/cu13/lib/python3.12/site-packages/nvidia/nvjitlink/lib"
+          export JITLINK="venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib"
           export CUOPT_VERSION="`cat "$CUOPT/VERSION"`"
           export CUOPT_HASH="`cat "$CUOPT/GIT_COMMIT"`"
           gcc -Wall gmscuopt.c -o gmscuopt-cu13.out \
