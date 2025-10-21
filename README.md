@@ -28,7 +28,7 @@ libcurand.so.10
 libcusolver.so.11
 libnvJitLink.so.12
 ```
-and can be installed e.g. via `pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu12==25.5.* nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12` into a Python environment.
+and can be installed e.g. via `pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu12==25.5.* nvidia-cuda-runtime-cu12==12.8.* nvidia-nvjitlink-cu12` into a Python environment or downloaded as archive `cu12-runtime.zip` from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases).
 
 ## Test the setup
 
