@@ -135,6 +135,7 @@ int main(int argc, char *argv[])
   char* constraint_sense=NULL;
   char* variable_types=NULL;
   int has_integer_vars = 0;
+  flnmiptrace[0] = '\0';
 
   // Create solver settings
   status = cuOptCreateSolverSettings(&settings);
@@ -142,6 +143,16 @@ int main(int argc, char *argv[])
     printOut(gev, "Error creating solver settings: %d\n", status);
     goto DONE;
   }
+
+  /*
+  mip_callback_context_t context = {0};
+  context.n_variables = num_variables;
+  status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_callback, &context);
+  if (status != CUOPT_SUCCESS) {
+    printOut(gev, "Error setting get-solution callback\n", status);
+    goto DONE;
+  }
+  */
 
   // Set solver parameters with GAMS options
   if (gevGetIntOpt(gev, gevThreadsRaw) != 0) {
@@ -202,7 +213,13 @@ int main(int argc, char *argv[])
       }
     }
   }
-  
+
+  if(optGetDefinedStr(opt, "miptrace")) {
+    optGetStrStr(opt, "miptrace", flnmiptrace);
+    char sval2[256];
+    mipTraceOpen(flnmiptrace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2));
+  }
+
   if (!optGetDefinedStr(opt, "prob_read")) {
     constraint_matrix_row_offsets = malloc((num_constraints+1)*sizeof(cuopt_int_t));
     constraint_matrix_column_indices = malloc(nnz*sizeof(cuopt_int_t));
@@ -492,6 +509,9 @@ DONE:
   free(upper_bounds);
   free(constraint_sense);
   free(variable_types);
+
+  if(fpMIPTrace)
+    mipTraceClose();
 
 GAMSDONE:
   gmoFree(&gmo);
