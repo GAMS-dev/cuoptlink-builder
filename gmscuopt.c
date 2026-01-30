@@ -125,6 +125,7 @@ main (int argc, char *argv[])
   cuopt_float_t* upper_bounds=NULL;
   char* constraint_sense=NULL;
   char* variable_types=NULL;
+  int has_integer_vars = 0;
 
   // Create solver settings
   status = cuOptCreateSolverSettings(&settings);
@@ -237,8 +238,6 @@ main (int argc, char *argv[])
       printOut(gev, "gmoGetVarType failed. Status: %d\n", status);
       goto DONE;
     }
-
-    int has_integer_vars = 0;
 
     for (int j=0; j<num_variables; j++) {
       switch (constraint_matrix_column_indices[j]) {
