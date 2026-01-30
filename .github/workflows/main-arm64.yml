@@ -39,10 +39,10 @@ jobs:
       # Get GAMS (ARM64 version)
       - name: Download and extract latest GAMS distribution
         run: |
-          curl https://d37drm4t2jghv5.cloudfront.net/distributions/latest/linux/llinux_arm64_sfx.exe --output linux_arm64_sfx.exe
+          curl https://d37drm4t2jghv5.cloudfront.net/distributions/latest/linux/linux_arm64_sfx.exe --output linux_arm64_sfx.exe
           unzip -q linux_arm64_sfx.exe
           mv gams*_linux_arm64_sfx gamsdist
-          rm llinux_arm64_sfx.exe
+          rm linux_arm64_sfx.exe
 
       # Build link
       - name: Compile GAMS/cuOpt-link binary "gmscuopt.out" for CUDA 12 and then for CUDA 13
