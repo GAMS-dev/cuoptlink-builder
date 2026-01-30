@@ -1,15 +1,15 @@
-name: Build cuOpt link for GAMS
+name: Build cuOpt link for GAMS (ARM64)
 
 on:
   push:
 #    branches: [main]
     tags:
-      - '*'        # Run only when a new tag is pushed
+      - '*'
   pull_request:
 
 jobs:
   build-link:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     container:
       image: python:3.12
 
@@ -36,13 +36,13 @@ jobs:
             pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu13==25.12.* -qq &&
             deactivate"
 
-      # Get GAMS
+      # Get GAMS (ARM64 version)
       - name: Download and extract latest GAMS distribution
         run: |
-          curl https://d37drm4t2jghv5.cloudfront.net/distributions/latest/linux/linux_x64_64_sfx.exe --output linux_x64_64_sfx.exe
-          unzip -q linux_x64_64_sfx.exe
-          mv gams*_linux_x64_64_sfx gamsdist
-          rm linux_x64_64_sfx.exe
+          curl https://d37drm4t2jghv5.cloudfront.net/distributions/latest/linux/llinux_arm64_sfx.exe --output linux_arm64_sfx.exe
+          unzip -q linux_arm64_sfx.exe
+          mv gams*_linux_arm64_sfx gamsdist
+          rm llinux_arm64_sfx.exe
 
       # Build link
       - name: Compile GAMS/cuOpt-link binary "gmscuopt.out" for CUDA 12 and then for CUDA 13
@@ -113,39 +113,39 @@ jobs:
       - name: Upload CUDA 12 link artifact to GitHub Actions (always)
         uses: actions/upload-artifact@v4
         with:
-          name: cuopt-link-cu12
+          name: cuopt-link-cu12-arm64
           path: release-cu12/
 
       - name: Upload CUDA 12 runtime artifact to GitHub Actions (always)
         uses: actions/upload-artifact@v4
         with:
-          name: cu12-runtime
+          name: cu12-runtime-arm64
           path: runtime-cu12/
 
       - name: Upload CUDA 13 link artifact to GitHub Actions (always)
         uses: actions/upload-artifact@v4
         with:
-          name: cuopt-link-cu13
+          name: cuopt-link-cu13-arm64
           path: release-cu13/
 
       - name: Upload CUDA 13 runtime artifact to GitHub Actions (always)
         uses: actions/upload-artifact@v4
         with:
-          name: cu13-runtime
+          name: cu13-runtime-arm64
           path: runtime-cu13/
 
-      # Bundle into archives
+      # Zip Files
       - name: Create zip archive (only on tag push)
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           cd release-cu12
-          zip -r ../cuopt-link-release-cu12.zip .
+          zip -r ../cuopt-link-release-cu12-arm64.zip .
           cd ../runtime-cu12
-          zip -r ../cu12-runtime.zip .
+          zip -r ../cu12-runtime-arm64.zip .
           cd ../release-cu13
-          zip -r ../cuopt-link-release-cu13.zip .
+          zip -r ../cuopt-link-release-cu13-arm64.zip .
           cd ../runtime-cu13
-          zip -r ../cu13-runtime.zip .
+          zip -r ../cu13-runtime-arm64.zip .
 
       # Create new release with archives
       - name: Create GitHub Release (only on tag push)
@@ -153,9 +153,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            cuopt-link-release-cu12.zip
-            cu12-runtime.zip
-            cuopt-link-release-cu13.zip
-            cu13-runtime.zip
+            cuopt-link-release-cu12-arm64.zip
+            cu12-runtime-arm64.zip
+            cuopt-link-release-cu13-arm64.zip
+            cu13-runtime-arm64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
