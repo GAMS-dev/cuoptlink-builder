@@ -28,12 +28,12 @@ jobs:
           python -m venv venvs/cu12
           bash -c "source venvs/cu12/bin/activate && \
             pip install --upgrade pip -qq && \
-            pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu12==25.10.* cuda-toolkit[cudart,nvjitlink]==12.9.* -qq &&
+            pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu12==25.12.* -qq &&
             deactivate"
           python -m venv venvs/cu13
           bash -c "source venvs/cu13/bin/activate && \
             pip install --upgrade pip -qq && \
-            pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu13==25.10.* cuda-toolkit[cudart,nvjitlink]==13.0.* -qq &&
+            pip install --extra-index-url=https://pypi.nvidia.com cuopt-cu13==25.12.* -qq &&
             deactivate"
 
       # Get GAMS
