@@ -238,11 +238,16 @@ main (int argc, char *argv[])
       goto DONE;
     }
 
+    int has_integer_vars = 0;
+
     for (int j=0; j<num_variables; j++) {
       switch (constraint_matrix_column_indices[j]) {
          case gmovar_X: variable_types[j] = CUOPT_CONTINUOUS; break;
          case gmovar_B:
-         case gmovar_I: variable_types[j] = CUOPT_INTEGER; break;
+         case gmovar_I:
+           variable_types[j] = CUOPT_INTEGER;
+           has_integer_vars = 1;
+           break;
          default: printOut(gev, "Known variable type %d\n", constraint_matrix_column_indices[j]);
       }
     }
@@ -379,14 +384,14 @@ main (int argc, char *argv[])
         gmoSolveStatSet(gmo, gmoSolveStat_SolverErr);
         break;
       case CUOPT_TERIMINATION_STATUS_PRIMAL_FEASIBLE:
-        if (gmoModelType(gmo) == gmoProc_mip) {
+        if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
           gmoModelStatSet(gmo, gmoModelStat_Integer);
         } else {
           gmoModelStatSet(gmo, gmoModelStat_Feasible);
         }
         break;
       case CUOPT_TERIMINATION_STATUS_FEASIBLE_FOUND:
-        if (gmoModelType(gmo) == gmoProc_mip) {
+        if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
           gmoModelStatSet(gmo, gmoModelStat_Integer);
         } else {
           gmoModelStatSet(gmo, gmoModelStat_Feasible);
@@ -412,7 +417,7 @@ main (int argc, char *argv[])
     }
     gmoSetHeadnTail(gmo, gmoHobjval, objective_value);
 
-    if (gmoModelType(gmo) == gmoProc_mip) {
+    if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
       status = cuOptGetSolutionBound(solution, &objective_value);
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error getting solution bound: %d\n", status);
@@ -431,7 +436,7 @@ main (int argc, char *argv[])
     int presolve, dual_postsolve;
     cuOptGetIntegerParameter(settings, "presolve", &presolve);
     cuOptGetIntegerParameter(settings, "dual_postsolve", &dual_postsolve);
-    if (gmoModelType(gmo) != gmoProc_mip && (!presolve || dual_postsolve) ) {
+    if (gmoModelType(gmo) != gmoProc_mip && !has_integer_vars && (!presolve || dual_postsolve) ) {
       status = cuOptGetReducedCosts(solution, objective_coefficients); // reuse n-vector
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error getting reduced cost: %d\n", status);
