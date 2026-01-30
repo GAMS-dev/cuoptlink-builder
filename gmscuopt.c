@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 #include "gmomcc.h"
 #include "gevmcc.h"
 #include "optcc.h"
@@ -23,8 +24,16 @@ printOut (gevHandle_t gev, char *fmt, ...)
   return rc;
 }
 
-int
-main (int argc, char *argv[])
+static char flnmiptrace[256];
+static char MIPTraceID[32] = "";
+static FILE *fpMIPTrace = NULL;
+static int MIPTraceSeq = 0;
+
+int mipTraceOpen(const char *fname, const char *solverID, const int optFileNum, const char *inputName);
+int mipTraceClose();
+int mipTraceLine(char seriesID, double node, int giveint, double seconds, double bestint, double bestbnd);
+
+int main(int argc, char *argv[])
 {
   gmoHandle_t gmo=NULL;
   gevHandle_t gev=NULL;
@@ -492,6 +501,74 @@ GAMSDONE:
   return 0;
 
 } /* main */
+
+
+
+int mipTraceOpen(const char *fname, const char *solverID, const int optFileNum, const char *inputName)
+{
+  if (NULL != fpMIPTrace)
+    return 1; /* already open: error */
+
+  strcpy(flnmiptrace, fname);
+  fpMIPTrace = fopen(flnmiptrace, "w");
+  if (NULL == fpMIPTrace)
+    return 3;
+
+  strncpy(MIPTraceID, solverID, sizeof(MIPTraceID) - 1);
+  MIPTraceID[sizeof(MIPTraceID) - 1] = '\0';
+  MIPTraceSeq = 1;
+  fprintf(fpMIPTrace, "* miptrace file %s: ID = %s.%d Instance = %s\n", flnmiptrace, MIPTraceID, optFileNum, inputName);
+  fprintf(fpMIPTrace, "* fields are lineNum, seriesID, node, seconds, bestFound, bestBound\n");
+  fflush(fpMIPTrace);
+  return 0;
+} /* mipTraceOpen */
+
+int mipTraceClose()
+{
+  int rc;
+  if (NULL == fpMIPTrace)
+    return 2; /* already closed: error */
+  fprintf(fpMIPTrace, "* miptrace file %s closed\n", flnmiptrace);
+  rc = fclose(fpMIPTrace);
+  fpMIPTrace = NULL;
+  return (0 == rc) ? 0 : 1;
+} /* mipTraceClose */
+
+int mipTraceLine(char seriesID, double node, int giveint,
+                    double seconds, double bestint, double bestbnd)
+{
+  int rc;
+
+  if (NULL == fpMIPTrace)
+    return -1; /* not open: error */
+
+  if (giveint)
+  {
+    if (bestbnd == GMS_SV_NA)
+      rc = fprintf(fpMIPTrace, "%d, %c, %g, %.15g, %.15g, na\n", MIPTraceSeq,
+                   isalnum(seriesID) ? seriesID : 'X',
+                   node, seconds, bestint);
+    else
+      rc = fprintf(fpMIPTrace, "%d, %c, %g, %.15g, %.15g, %.15g\n", MIPTraceSeq,
+                   isalnum(seriesID) ? seriesID : 'X',
+                   node, seconds, bestint, bestbnd);
+  }
+  else
+  {
+    if (bestbnd == GMS_SV_NA)
+      rc = fprintf(fpMIPTrace, "%d, %c, %g, %.15g, na, na\n", MIPTraceSeq,
+                   isalnum(seriesID) ? seriesID : 'X',
+                   node, seconds);
+    else
+      rc = fprintf(fpMIPTrace, "%d, %c, %g, %.15g, na, %g\n", MIPTraceSeq,
+                   isalnum(seriesID) ? seriesID : 'X',
+                   node, seconds, bestbnd);
+  }
+  fflush(fpMIPTrace);
+  MIPTraceSeq++;
+
+  return rc;
+} /* mipTraceLine */
 
 #if 0
 t program for cuOpt linear programming solver
