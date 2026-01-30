@@ -2,6 +2,7 @@
 * optcuopt.def
 *
 num_cpu_threads integer 0 -1 -1 maxint 1 1 Controls the number of CPU threads used in the LP and MIP solvers (default GAMS Threads)
+num_gpus integer 0 1 1 2 1 2 Controls the number of GPUs to use for the solve. This setting is only relevant for LP problems that uses concurrent mode and supports up to 2 GPUs at the moment. Using this mode will run PDLP and barrier in parallel on different GPUs to avoid sharing single GPU resources.
 presolve boolean 0 0 1 1 Controls whether presolve is enabled. Presolve can reduce problem size and improve solve time. Enabled by default for MIP, disabled by default for LP.
 dual_postsolve boolean 0 0 1 2 Controls whether dual postsolve is enabled. Disabling dual postsolve can improve solve time at the expense of not having access to the dual solution. Enabled by default for LP when presolve is enabled. This is not relevant for MIP problems
 time_limit integer 0 maxint 0 maxint 1 1 Controls the time limit in seconds after which the solver will stop and return the current solution (default GAMS ResLim)
