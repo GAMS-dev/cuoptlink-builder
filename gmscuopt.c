@@ -24,14 +24,24 @@ printOut (gevHandle_t gev, char *fmt, ...)
   return rc;
 }
 
-static char flnmiptrace[256];
-static char MIPTraceID[32] = "";
-static FILE *fpMIPTrace = NULL;
-static int MIPTraceSeq = 0;
+static char fln_mip_trace[256];
+static char mip_trace_id[32] = "";
+static FILE *fp_mip_trace = NULL;
+static int mip_trace_seq = 0;
 
-int mipTraceOpen(const char *fname, const char *solverID, const int optFileNum, const char *inputName);
-int mipTraceClose();
-int mipTraceLine(char seriesID, double node, int giveint, double seconds, double bestint, double bestbnd);
+static int mip_trace_open(const char *fname, const char *solverID, const int optFileNum, const char *inputName);
+static int mip_trace_close();
+static int mip_trace_line(char seriesID, double node, int giveint, double seconds, double bestint, double bestbnd);
+
+typedef struct sl_state_s
+{
+  gevHandle_t gev;
+  double tstart;
+  int nvars;
+} sl_state_t;
+
+static void mip_get_solution_cb(const cuopt_float_t *solution, const cuopt_float_t *objective_value,
+                                const cuopt_float_t *solution_bound, void *user_data);
 
 int main(int argc, char *argv[])
 {
@@ -135,7 +145,7 @@ int main(int argc, char *argv[])
   char* constraint_sense=NULL;
   char* variable_types=NULL;
   int has_integer_vars = 0;
-  flnmiptrace[0] = '\0';
+  fln_mip_trace[0] = '\0';
 
   // Create solver settings
   status = cuOptCreateSolverSettings(&settings);
@@ -144,10 +154,14 @@ int main(int argc, char *argv[])
     goto DONE;
   }
 
+  sl_state_t context;
+  context.gev = gev;
+  context.tstart = gevTimeJNow(gev);
+  context.nvars = num_variables;
+  mip_trace_line('I', 0, 0, 0, 0, 0);
+
   /*
-  mip_callback_context_t context = {0};
-  context.n_variables = num_variables;
-  status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_callback, &context);
+  status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_cb, &context);
   if (status != CUOPT_SUCCESS) {
     printOut(gev, "Error setting get-solution callback\n", status);
     goto DONE;
@@ -155,7 +169,8 @@ int main(int argc, char *argv[])
   */
 
   // Set solver parameters with GAMS options
-  if (gevGetIntOpt(gev, gevThreadsRaw) != 0) {
+  if (gevGetIntOpt(gev, gevThreadsRaw) != 0)
+  {
     status = cuOptSetIntegerParameter(settings, CUOPT_NUM_CPU_THREADS, gevGetIntOpt(gev, gevThreadsRaw));
     if (status != CUOPT_SUCCESS) {
       printOut(gev, "Error setting number of CPU threads: %d\n", status);
@@ -214,10 +229,10 @@ int main(int argc, char *argv[])
     }
   }
 
-  if(optGetDefinedStr(opt, "miptrace")) {
-    optGetStrStr(opt, "miptrace", flnmiptrace);
+  if(optGetDefinedStr(opt, "mip_trace_")) {
+    optGetStrStr(opt, "mip_trace_", fln_mip_trace);
     char sval2[256];
-    mipTraceOpen(flnmiptrace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2));
+    mip_trace_open(fln_mip_trace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2));
   }
 
   if (!optGetDefinedStr(opt, "prob_read")) {
@@ -510,8 +525,8 @@ DONE:
   free(constraint_sense);
   free(variable_types);
 
-  if(fpMIPTrace)
-    mipTraceClose();
+  if(fp_mip_trace)
+    mip_trace_close();
 
 GAMSDONE:
   gmoFree(&gmo);
@@ -522,73 +537,80 @@ GAMSDONE:
 
 } /* main */
 
-
-
-int mipTraceOpen(const char *fname, const char *solverID, const int optFileNum, const char *inputName)
+int mip_trace_open(const char *fname, const char *solverID, const int optFileNum, const char *inputName)
 {
-  if (NULL != fpMIPTrace)
+  if (NULL != fp_mip_trace)
     return 1; /* already open: error */
 
-  strcpy(flnmiptrace, fname);
-  fpMIPTrace = fopen(flnmiptrace, "w");
-  if (NULL == fpMIPTrace)
+  strcpy(fln_mip_trace, fname);
+  fp_mip_trace = fopen(fln_mip_trace, "w");
+  if (NULL == fp_mip_trace)
     return 3;
 
-  strncpy(MIPTraceID, solverID, sizeof(MIPTraceID) - 1);
-  MIPTraceID[sizeof(MIPTraceID) - 1] = '\0';
-  MIPTraceSeq = 1;
-  fprintf(fpMIPTrace, "* miptrace file %s: ID = %s.%d Instance = %s\n", flnmiptrace, MIPTraceID, optFileNum, inputName);
-  fprintf(fpMIPTrace, "* fields are lineNum, seriesID, node, seconds, bestFound, bestBound\n");
-  fflush(fpMIPTrace);
+  strncpy(mip_trace_id, solverID, sizeof(mip_trace_id) - 1);
+  mip_trace_id[sizeof(mip_trace_id) - 1] = '\0';
+  mip_trace_seq = 1;
+  fprintf(fp_mip_trace, "* mip_trace_ file %s: ID = %s.%d Instance = %s\n", fln_mip_trace, mip_trace_id, optFileNum, inputName);
+  fprintf(fp_mip_trace, "* fields are lineNum, seriesID, node, seconds, bestFound, bestBound\n");
+  fflush(fp_mip_trace);
   return 0;
-} /* mipTraceOpen */
+} /* mip_trace_open */
 
-int mipTraceClose()
+int mip_trace_close()
 {
   int rc;
-  if (NULL == fpMIPTrace)
+  if (NULL == fp_mip_trace)
     return 2; /* already closed: error */
-  fprintf(fpMIPTrace, "* miptrace file %s closed\n", flnmiptrace);
-  rc = fclose(fpMIPTrace);
-  fpMIPTrace = NULL;
+  fprintf(fp_mip_trace, "* mip_trace_ file %s closed\n", fln_mip_trace);
+  rc = fclose(fp_mip_trace);
+  fp_mip_trace = NULL;
   return (0 == rc) ? 0 : 1;
-} /* mipTraceClose */
+} /* mip_trace_close */
 
-int mipTraceLine(char seriesID, double node, int giveint,
+int mip_trace_line(char seriesID, double node, int giveint,
                     double seconds, double bestint, double bestbnd)
 {
   int rc;
 
-  if (NULL == fpMIPTrace)
+  if (NULL == fp_mip_trace)
     return -1; /* not open: error */
 
   if (giveint)
   {
     if (bestbnd == GMS_SV_NA)
-      rc = fprintf(fpMIPTrace, "%d, %c, %g, %.15g, %.15g, na\n", MIPTraceSeq,
+      rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, %.15g, na\n", mip_trace_seq,
                    isalnum(seriesID) ? seriesID : 'X',
                    node, seconds, bestint);
     else
-      rc = fprintf(fpMIPTrace, "%d, %c, %g, %.15g, %.15g, %.15g\n", MIPTraceSeq,
+      rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, %.15g, %.15g\n", mip_trace_seq,
                    isalnum(seriesID) ? seriesID : 'X',
                    node, seconds, bestint, bestbnd);
   }
   else
   {
     if (bestbnd == GMS_SV_NA)
-      rc = fprintf(fpMIPTrace, "%d, %c, %g, %.15g, na, na\n", MIPTraceSeq,
+      rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, na, na\n", mip_trace_seq,
                    isalnum(seriesID) ? seriesID : 'X',
                    node, seconds);
     else
-      rc = fprintf(fpMIPTrace, "%d, %c, %g, %.15g, na, %g\n", MIPTraceSeq,
+      rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, na, %g\n", mip_trace_seq,
                    isalnum(seriesID) ? seriesID : 'X',
                    node, seconds, bestbnd);
   }
-  fflush(fpMIPTrace);
-  MIPTraceSeq++;
+  fflush(fp_mip_trace);
+  mip_trace_seq++;
 
   return rc;
-} /* mipTraceLine */
+} /* mip_trace_line */
+
+static void mip_get_solution_cb(const cuopt_float_t *solution, const cuopt_float_t *objective_value,
+                                const cuopt_float_t *solution_bound, void *user_data){
+  sl_state_t *state = (sl_state_t *)user_data;
+  double elapsed = (gevTimeJNow(state->gev) - state->tstart) * 3600.0 * 24.0;
+  double obj = *objective_value;
+  double bnd = *solution_bound;
+  mip_trace_line('I', 0, 0, elapsed, obj, bnd);
+}
 
 #if 0
 t program for cuOpt linear programming solver
