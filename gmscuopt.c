@@ -146,6 +146,7 @@ int main(int argc, char *argv[])
   char* variable_types=NULL;
   int has_integer_vars = 0;
   fln_mip_trace[0] = '\0';
+  sl_state_t context;
 
   // Create solver settings
   status = cuOptCreateSolverSettings(&settings);
@@ -154,19 +155,20 @@ int main(int argc, char *argv[])
     goto DONE;
   }
 
-  sl_state_t context;
-  context.gev = gev;
-  context.tstart = gevTimeJNow(gev);
-  context.nvars = num_variables;
-  mip_trace_line('S', 0, 0, 0, GMS_SV_NA, GMS_SV_NA);
-
-  /*
-  status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_cb, &context);
-  if (status != CUOPT_SUCCESS) {
-    printOut(gev, "Error setting get-solution callback\n", status);
-    goto DONE;
+  if (fp_mip_trace)
+  {
+    context.gev = gev;
+    context.tstart = gevTimeJNow(gev);
+    context.nvars = num_variables;
+    mip_trace_line('S', 0, 0, 0, GMS_SV_NA, GMS_SV_NA);
+    /*
+    status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_cb, &context);
+    if (status != CUOPT_SUCCESS) {
+      printOut(gev, "Error setting get-solution callback\n", status);
+      goto DONE;
+    }
+    */
   }
-  */
 
   // Set solver parameters with GAMS options
   if (gevGetIntOpt(gev, gevThreadsRaw) != 0)
