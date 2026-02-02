@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
   context.gev = gev;
   context.tstart = gevTimeJNow(gev);
   context.nvars = num_variables;
-  mip_trace_line('I', 0, 0, 0, 0, 0);
+  mip_trace_line('S', 0, 0, 0, GMS_SV_NA, GMS_SV_NA);
 
   /*
   status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_cb, &context);
@@ -609,7 +609,7 @@ static void mip_get_solution_cb(const cuopt_float_t *solution, const cuopt_float
   double elapsed = (gevTimeJNow(state->gev) - state->tstart) * 3600.0 * 24.0;
   double obj = *objective_value;
   double bnd = *solution_bound;
-  mip_trace_line('I', 0, 0, elapsed, obj, bnd);
+  mip_trace_line('I', 0, 1, elapsed, obj, bnd);
 }
 
 #if 0
