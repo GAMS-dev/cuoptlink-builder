@@ -6,6 +6,7 @@ on:
     tags:
       - '*'        # Run only when a new tag is pushed
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-link:
