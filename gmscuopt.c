@@ -395,7 +395,7 @@ int main(int argc, char *argv[])
   // Get solution information
   cuopt_float_t solution_time;
   cuopt_int_t termination_status;
-  cuopt_float_t objective_value;  
+  cuopt_float_t objective_value, solution_bound;
 
   status = cuOptGetTerminationStatus(solution, &termination_status);
   if (status != CUOPT_SUCCESS) {
@@ -460,12 +460,12 @@ int main(int argc, char *argv[])
     gmoSetHeadnTail(gmo, gmoHobjval, objective_value);
 
     if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
-      status = cuOptGetSolutionBound(solution, &objective_value);
+      status = cuOptGetSolutionBound(solution, &solution_bound);
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error getting solution bound: %d\n", status);
         goto DONE;
       }
-      gmoSetHeadnTail(gmo, gmoTmipbest, objective_value);
+      gmoSetHeadnTail(gmo, gmoTmipbest, solution_bound);
     }
 
     status = cuOptGetPrimalSolution(solution, objective_coefficients); // reuse n-vector
@@ -474,6 +474,12 @@ int main(int argc, char *argv[])
       goto DONE;
     }
     gmoSetVarL(gmo, objective_coefficients);
+
+    if(fp_mip_trace)
+    {
+      double total_elapsed = (gevTimeJNow(gev) - context.tstart) * 3600.0 * 24.0;
+      mip_trace_line('E', 0, 1, total_elapsed, objective_value, solution_bound);
+    }
 
     int presolve, dual_postsolve;
     cuOptGetIntegerParameter(settings, "presolve", &presolve);
