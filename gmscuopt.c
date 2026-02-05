@@ -161,13 +161,11 @@ int main(int argc, char *argv[])
     context.tstart = gevTimeJNow(gev);
     context.nvars = num_variables;
     mip_trace_line('S', 0, 0, 0, GMS_SV_NA, GMS_SV_NA);
-    /*
     status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_cb, &context);
     if (status != CUOPT_SUCCESS) {
       printOut(gev, "Error setting get-solution callback\n", status);
       goto DONE;
     }
-    */
   }
 
   // Set solver parameters with GAMS options
