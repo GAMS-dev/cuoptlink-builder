@@ -147,6 +147,8 @@ int main(int argc, char *argv[])
   int has_integer_vars = 0;
   fln_mip_trace[0] = '\0';
   sl_state_t context;
+  int mipstart = 0;
+  cuopt_float_t *initial_levels = NULL;
 
   // Create solver settings
   status = cuOptCreateSolverSettings(&settings);
@@ -157,13 +159,18 @@ int main(int argc, char *argv[])
 
   if (optGetDefinedStr(opt, "miptrace"))
   {
-    optGetStrStr(opt, "miptrace", fln_mip_trace);
-    char sval2[256];
-    if (mip_trace_open(fln_mip_trace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2)))
+    if (gmoModelType(gmo) == gmoProc_mip)
     {
-      printOut(gev, "Error opening trace file >%s<!", sval2);
-      goto DONE;
+      optGetStrStr(opt, "miptrace", fln_mip_trace);
+      char sval2[256];
+      if (mip_trace_open(fln_mip_trace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2)))
+      {
+        printOut(gev, "Error opening trace file >%s<!", sval2);
+        goto DONE;
+      }
     }
+    else
+      printOut(gev, "WARNING: Enabling a MIP trace is only allowed for model type MIP!");
   }
 
   if (fp_mip_trace)
@@ -177,6 +184,13 @@ int main(int argc, char *argv[])
       printOut(gev, "Error setting get-solution callback\n", status);
       goto DONE;
     }
+  }
+
+  mipstart = optGetIntStr(opt, "mipstart");
+  if(mipstart && gmoModelType(gmo) != gmoProc_mip)
+  {
+    printOut(gev, "WARNING: Setting a MIP start is only allowed for model type MIP!");
+    mipstart = 0;
   }
 
   // Set solver parameters with GAMS options
@@ -373,6 +387,19 @@ int main(int argc, char *argv[])
     } else if (loglevel==4) {
       cuOptSetIntegerParameter(settings, CUOPT_LOG_TO_CONSOLE, 1);
     }
+  }
+
+  // Maybe add mip start
+  if(mipstart)
+  {
+    if (initial_levels == NULL)
+    {
+      initial_levels = malloc(sizeof(cuopt_float_t) * gmoN(gmo));
+      gmoGetVarL(gmo, initial_levels);
+    }
+    cuOptAddMIPStart(settings, initial_levels, gmoN(gmo));
+    free(initial_levels);
+    initial_levels = NULL;
   }
 
   // Solve the problem
