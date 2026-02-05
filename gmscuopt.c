@@ -229,8 +229,8 @@ int main(int argc, char *argv[])
     }
   }
 
-  if(optGetDefinedStr(opt, "mip_trace_")) {
-    optGetStrStr(opt, "mip_trace_", fln_mip_trace);
+  if(optGetDefinedStr(opt, "miptrace")) {
+    optGetStrStr(opt, "miptrace", fln_mip_trace);
     char sval2[256];
     mip_trace_open(fln_mip_trace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2));
   }
