@@ -155,6 +155,17 @@ int main(int argc, char *argv[])
     goto DONE;
   }
 
+  if (optGetDefinedStr(opt, "miptrace"))
+  {
+    optGetStrStr(opt, "miptrace", fln_mip_trace);
+    char sval2[256];
+    if (mip_trace_open(fln_mip_trace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2)))
+    {
+      printOut(gev, "Error opening trace file >%s<!", sval2);
+      goto DONE;
+    }
+  }
+
   if (fp_mip_trace)
   {
     context.gev = gev;
@@ -220,19 +231,13 @@ int main(int argc, char *argv[])
         printOut(gev, "Error setting integer option >%s<: %d\n", optname, status);
         goto DONE;
       }
-    } else {
+    } else if(data_type == optDataDouble) {
       status = cuOptSetFloatParameter(settings, optname, dval);
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error setting float option >%s<: %d\n", optname, status);
         goto DONE;
       }
     }
-  }
-
-  if(optGetDefinedStr(opt, "miptrace")) {
-    optGetStrStr(opt, "miptrace", fln_mip_trace);
-    char sval2[256];
-    mip_trace_open(fln_mip_trace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2));
   }
 
   if (!optGetDefinedStr(opt, "prob_read")) {
