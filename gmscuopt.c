@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
       }
     }
     else
-      printOut(gev, "WARNING: Enabling a MIP trace is only allowed for model type MIP!");
+      printOut(gev, "WARNING: Enabling a MIP trace is only allowed for model type MIP!\n");
   }
 
   if (fp_mip_trace)
@@ -189,7 +189,7 @@ int main(int argc, char *argv[])
   mipstart = optGetIntStr(opt, "mipstart");
   if(mipstart && gmoModelType(gmo) != gmoProc_mip)
   {
-    printOut(gev, "WARNING: Setting a MIP start is only allowed for model type MIP!");
+    printOut(gev, "WARNING: Setting a MIP start is only allowed for model type MIP!\n");
     mipstart = 0;
   }
 
