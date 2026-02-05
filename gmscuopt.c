@@ -590,7 +590,7 @@ int mip_trace_line(char seriesID, double node, int giveint,
 
   if (giveint)
   {
-    if (bnd_na(best_bnd))
+    if (bnd_na(bestbnd))
       rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, %.15g, na\n", mip_trace_seq,
                    isalnum(seriesID) ? seriesID : 'X',
                    node, seconds, bestint);
