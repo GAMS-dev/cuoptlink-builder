@@ -578,6 +578,8 @@ int mip_trace_close()
   return (0 == rc) ? 0 : 1;
 } /* mip_trace_close */
 
+#define bnd_na(x) x == GMS_SV_NA || x == HUGE_VAL || x == -HUGE_VAL
+
 int mip_trace_line(char seriesID, double node, int giveint,
                     double seconds, double bestint, double bestbnd)
 {
@@ -588,7 +590,7 @@ int mip_trace_line(char seriesID, double node, int giveint,
 
   if (giveint)
   {
-    if (bestbnd == GMS_SV_NA)
+    if (bnd_na(best_bnd))
       rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, %.15g, na\n", mip_trace_seq,
                    isalnum(seriesID) ? seriesID : 'X',
                    node, seconds, bestint);
@@ -599,7 +601,7 @@ int mip_trace_line(char seriesID, double node, int giveint,
   }
   else
   {
-    if (bestbnd == GMS_SV_NA)
+    if (bnd_na(bestbnd))
       rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, na, na\n", mip_trace_seq,
                    isalnum(seriesID) ? seriesID : 'X',
                    node, seconds);
