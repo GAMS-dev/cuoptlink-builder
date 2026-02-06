@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
   optHandle_t opt=NULL;
   cuopt_int_t status;
   char msg[256], filename[256];
-  
+
   if (!gevCreate(&gev,msg,sizeof(msg))) {
     printf("Error creating GEV: %s\n", msg);
     goto GAMSDONE;
@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
     goto DONE;
   }
 
+  // Setup miptrace facility if option is enabled
   if (optGetDefinedStr(opt, "miptrace"))
   {
     if (gmoModelType(gmo) == gmoProc_mip)
@@ -172,7 +173,6 @@ int main(int argc, char *argv[])
     else
       printOut(gev, "WARNING: Enabling a MIP trace is only allowed for model type MIP!\n");
   }
-
   if (fp_mip_trace)
   {
     context.gev = gev;
@@ -186,6 +186,7 @@ int main(int argc, char *argv[])
     }
   }
 
+  // Check for MIP start feature
   mipstart = optGetIntStr(opt, "mipstart");
   if(mipstart && gmoModelType(gmo) != gmoProc_mip)
   {
@@ -251,6 +252,26 @@ int main(int argc, char *argv[])
         printOut(gev, "Error setting float option >%s<: %d\n", optname, status);
         goto DONE;
       }
+    }
+  }
+
+  // Try taking primal or dual (marginal) values from user (for LPs)
+  if (gmoModelType(gmo) == gmoProc_lp)
+  {
+    cuopt_int_t chosen_method;
+    cuOptGetIntegerParameter(settings, "method", &chosen_method);
+    // only when some PDLP is used and we have basis
+    if ((chosen_method == CUOPT_METHOD_PDLP || chosen_method == CUOPT_METHOD_CONCURRENT) && gmoHaveBasis(gmo))
+    {
+      int nvars = gmoN(gmo), nconstraints = gmoM(gmo);
+      cuopt_float_t *lvls = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nvars);
+      cuopt_float_t *marginals = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nconstraints);
+      gmoGetVarL(gmo, lvls);
+      gmoGetEquM(gmo, marginals);
+      cuOptSetInitialPrimalSolution(settings, lvls, nvars);
+      cuOptSetInitialDualSolution(settings, marginals, nconstraints);
+      free(lvls);
+      free(marginals);
     }
   }
 
