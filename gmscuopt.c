@@ -148,7 +148,6 @@ int main(int argc, char *argv[])
   fln_mip_trace[0] = '\0';
   sl_state_t context;
   int mipstart = 0;
-  cuopt_float_t *initial_levels = NULL;
 
   // Create solver settings
   status = cuOptCreateSolverSettings(&settings);
@@ -259,17 +258,55 @@ int main(int argc, char *argv[])
   if (gmoModelType(gmo) == gmoProc_lp)
   {
     cuopt_int_t chosen_method;
-    cuOptGetIntegerParameter(settings, "method", &chosen_method);
+    status = cuOptGetIntegerParameter(settings, "method", &chosen_method);
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error querying method option.\n");
+      goto DONE;
+    }
     // only when some PDLP is used and we have basis
     if ((chosen_method == CUOPT_METHOD_PDLP || chosen_method == CUOPT_METHOD_CONCURRENT) && gmoHaveBasis(gmo))
     {
       int nvars = gmoN(gmo), nconstraints = gmoM(gmo);
-      cuopt_float_t *lvls = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nvars);
-      cuopt_float_t *marginals = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nconstraints);
+      double *lvls = (double *)malloc(sizeof(double) * nvars);
+      double *marginals = (double *)malloc(sizeof(double) * nconstraints);
       gmoGetVarL(gmo, lvls);
       gmoGetEquM(gmo, marginals);
-      cuOptSetInitialPrimalSolution(settings, lvls, nvars);
-      cuOptSetInitialDualSolution(settings, marginals, nconstraints);
+#if defined(CUOPT_INSTANTIATE_DOUBLE)
+      status = cuOptSetInitialPrimalSolution(settings, lvls, nvars);
+      if (status != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting primal solution for LP.\n");
+        goto DONE;
+      }
+      status = cuOptSetInitialDualSolution(settings, marginals, nconstraints);
+      if (status != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting dual solution for LP.\n");
+        goto DONE;
+      }
+#else
+      cuopt_float_t *lvlsf = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nvars);
+      cuopt_float_t *marginalsf = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nconstraints);
+      for (int i = 0; i < nvars; i++)
+        lvlsf[i] = (cuopt_float_t)lvls[i];
+      for (int i = 0; i < nconstraints; i++)
+        marginalsf[i] = (cuopt_float_t)marginals[i];
+      status = cuOptSetInitialPrimalSolution(settings, lvlsf, nvars);
+      if (status != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting primal solution for LP.\n");
+        goto DONE;
+      }
+      status = cuOptSetInitialDualSolution(settings, marginalsf, nconstraints);
+      if (status != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting dual solution for LP.\n");
+        goto DONE;
+      }
+      free(lvlsf);
+      free(marginalsf);
+#endif
       free(lvls);
       free(marginals);
     }
@@ -413,14 +450,28 @@ int main(int argc, char *argv[])
   // Maybe add mip start
   if(mipstart)
   {
-    if (initial_levels == NULL)
+    double *initial_levels = malloc(sizeof(double) * gmoN(gmo));
+    gmoGetVarL(gmo, initial_levels);
+  #ifdef CUOPT_INSTANTIATE_DOUBLE
+    status = cuOptAddMIPStart(settings, initial_levels, gmoN(gmo));
+    if (status != CUOPT_SUCCESS)
     {
-      initial_levels = malloc(sizeof(cuopt_float_t) * gmoN(gmo));
-      gmoGetVarL(gmo, initial_levels);
+      printOut(gev, "Error setting MIP start.\n");
+      goto DONE;
     }
-    cuOptAddMIPStart(settings, initial_levels, gmoN(gmo));
+#else
+    cuopt_float_t *initial_levelsf = malloc(sizeof(cuopt_float_t) * gmoN(gmo));
+    for (int i = 0; i < gmoN(gmo); i++)
+      initial_levelsf[i] = (cuopt_float_t)initial_levels[i];
+    status = cuOptAddMIPStart(settings, initial_levelsf, gmoN(gmo));
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error setting MIP start.\n");
+      goto DONE;
+    }
+    free(initial_levelsf);
+#endif
     free(initial_levels);
-    initial_levels = NULL;
   }
 
   // Solve the problem
