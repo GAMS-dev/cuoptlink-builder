@@ -29,12 +29,12 @@ jobs:
           python -m venv venvs/cu12
           bash -c "source venvs/cu12/bin/activate && \
             pip install --upgrade pip -qq && \
-            pip install --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu12==26.2.0a139 -qq &&
+            pip install --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu12==26.2.0 -qq &&
             deactivate"
           python -m venv venvs/cu13
           bash -c "source venvs/cu13/bin/activate && \
             pip install --upgrade pip -qq && \
-            pip install --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu13==26.2.0a139 -qq &&
+            pip install --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu13==26.2.0 -qq &&
             deactivate"
 
       # Get GAMS
