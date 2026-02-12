@@ -1,8 +1,9 @@
+.vscode/
 /venv/*
 /release/*
-trnsport.gms
-trnsport.lst
-gmscuopt.out
+*.gms
+*.lst
+*.out
 cuopt.opt
 /examples/cu*runtime.zip
 /examples/cuopt-link-release-cu*.zip

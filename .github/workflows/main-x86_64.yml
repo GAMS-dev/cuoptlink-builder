@@ -1,0 +1,162 @@
+name: Build cuOpt link for GAMS (x86_64)
+
+on:
+  push:
+#    branches: [main]
+    tags:
+      - '*'        # Run only when a new tag is pushed
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-link:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install -y patchelf curl unzip zip gcc
+
+      # Get CUDA runtimes via pip
+      - name: Set up python virtual environments with NVIDIA dependencies for CUDA 12 and CUDA 13 (respectively)
+        run: |
+          mkdir -p venvs
+          python -m venv venvs/cu12
+          bash -c "source venvs/cu12/bin/activate && \
+            pip install --upgrade pip -qq && \
+            pip install --pre --extra-index-url=https://pypi.nvidia.com cuopt-cu12==26.2.* -qq &&
+            deactivate"
+          python -m venv venvs/cu13
+          bash -c "source venvs/cu13/bin/activate && \
+            pip install --upgrade pip -qq && \
+            pip install --pre --extra-index-url=https://pypi.nvidia.com cuopt-cu13==26.2.* -qq &&
+            deactivate"
+
+      # Get GAMS
+      - name: Download and extract latest GAMS distribution
+        run: |
+          curl https://d37drm4t2jghv5.cloudfront.net/distributions/latest/linux/linux_x64_64_sfx.exe --output linux_x64_64_sfx.exe
+          unzip -q linux_x64_64_sfx.exe
+          mv gams*_linux_x64_64_sfx gamsdist
+          rm linux_x64_64_sfx.exe
+
+      # Build link
+      - name: Compile GAMS/cuOpt-link binary "gmscuopt.out" for CUDA 12 and then for CUDA 13
+        run: |
+          export GAMSCAPI="gamsdist/apifiles/C/api"
+          export CUOPT="venvs/cu12/lib/python3.12/site-packages/libcuopt"
+          export JITLINK="venvs/cu12/lib/python3.12/site-packages/nvidia/nvjitlink/lib"
+          export CUOPT_VERSION="`cat "$CUOPT/VERSION"`"
+          export CUOPT_HASH="`cat "$CUOPT/GIT_COMMIT"`"
+          gcc -Wall gmscuopt.c -o gmscuopt-cu12.out \
+            -DCUOPT_VERSION=\"$CUOPT_VERSION\" -DCUOPT_HASH=\"$CUOPT_HASH\" \
+            -I $GAMSCAPI $GAMSCAPI/gmomcc.c $GAMSCAPI/optcc.c $GAMSCAPI/gevmcc.c \
+            -I $CUOPT/include $JITLINK/libnvJitLink.so.12 -L $CUOPT/lib64 -lcuopt
+          patchelf --set-rpath \$ORIGIN gmscuopt-cu12.out
+          export CUOPT="venvs/cu13/lib/python3.12/site-packages/libcuopt"
+          export JITLINK="venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib"
+          export CUOPT_VERSION="`cat "$CUOPT/VERSION"`"
+          export CUOPT_HASH="`cat "$CUOPT/GIT_COMMIT"`"
+          gcc -Wall gmscuopt.c -o gmscuopt-cu13.out \
+            -DCUOPT_VERSION=\"$CUOPT_VERSION\" -DCUOPT_HASH=\"$CUOPT_HASH\" \
+            -I $GAMSCAPI $GAMSCAPI/gmomcc.c $GAMSCAPI/optcc.c $GAMSCAPI/gevmcc.c \
+            -I $CUOPT/include $JITLINK/libnvJitLink.so.13 -L $CUOPT/lib64 -lcuopt
+          patchelf --set-rpath \$ORIGIN gmscuopt-cu13.out
+
+      # Collect dependencies for link and runtime convenience archive
+      - name: Prepare release artifact and runtime bundle
+        run: |
+          mkdir release-cu12
+          cp gmscuopt-cu12.out release-cu12/gmscuopt.out
+          cp assets/* release-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so release-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt/lib64/libmps_parser.so release-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-*.so.1.0.0 release-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libtbb-*.so.2 release-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libtbbmalloc-*.so.2 release-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so release-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/librmm/lib64/librmm.so release-cu12/
+          mkdir runtime-cu12
+          cp venvs/cu12/lib/python3.12/site-packages/nvidia/cu12/lib/libcudss.so.0 runtime-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/nvidia/cu12/lib/libcudss_mtlayer_gomp.so.0 runtime-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/nvidia/cusolver/lib/libcusolver.so.11 runtime-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/nvidia/cublas/lib/libcublas.so.12 runtime-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/nvidia/cublas/lib/libcublasLt.so.12 runtime-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/nvidia/nvjitlink/lib/libnvJitLink.so.12 runtime-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/nvidia/curand/lib/libcurand.so.10 runtime-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/nvidia/cusparse/lib/libcusparse.so.12 runtime-cu12/
+          mkdir release-cu13
+          cp gmscuopt-cu13.out release-cu13/gmscuopt.out
+          cp assets/* release-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so release-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/libcuopt/lib64/libmps_parser.so release-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/libcuopt_cu13.libs/libgomp-*.so.1.0.0 release-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/libcuopt_cu13.libs/libtbb-*.so.2 release-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/libcuopt_cu13.libs/libtbbmalloc-*.so.2 release-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so release-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/librmm/lib64/librmm.so release-cu13/
+          mkdir runtime-cu13
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libcudss.so.0 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libcudss_mtlayer_gomp.so.0 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libnvJitLink.so.13 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libcublas.so.13 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libcublasLt.so.13 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libcurand.so.10 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libcusolver.so.12 runtime-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/nvidia/cu13/lib/libcusparse.so.12 runtime-cu13/
+
+      # Upload artifacts
+      - name: Upload CUDA 12 link artifact to GitHub Actions (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuopt-link-cu12
+          path: release-cu12/
+
+      - name: Upload CUDA 12 runtime artifact to GitHub Actions (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cu12-runtime
+          path: runtime-cu12/
+
+      - name: Upload CUDA 13 link artifact to GitHub Actions (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuopt-link-cu13
+          path: release-cu13/
+
+      - name: Upload CUDA 13 runtime artifact to GitHub Actions (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cu13-runtime
+          path: runtime-cu13/
+
+      # Bundle into archives
+      - name: Create zip archive (only on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cd release-cu12
+          zip -r ../cuopt-link-release-cu12-x86_64.zip .
+          cd ../runtime-cu12
+          zip -r ../cu12-runtime-x86_64.zip .
+          cd ../release-cu13
+          zip -r ../cuopt-link-release-cu13-x86_64.zip .
+          cd ../runtime-cu13
+          zip -r ../cu13-runtime-x86_64.zip .
+
+      # Create new release with archives
+      - name: Create GitHub Release (only on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            cuopt-link-release-cu12-x86_64.zip
+            cu12-runtime-x86_64.zip
+            cuopt-link-release-cu13-x86_64.zip
+            cu13-runtime-x86_64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

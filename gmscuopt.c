@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 #include "gmomcc.h"
 #include "gevmcc.h"
 #include "optcc.h"
@@ -23,15 +24,33 @@ printOut (gevHandle_t gev, char *fmt, ...)
   return rc;
 }
 
-int
-main (int argc, char *argv[])
+static char fln_mip_trace[256];
+static char mip_trace_id[32] = "";
+static FILE *fp_mip_trace = NULL;
+static int mip_trace_seq = 0;
+
+static int mip_trace_open(const char *fname, const char *solverID, const int optFileNum, const char *inputName);
+static int mip_trace_close();
+static int mip_trace_line(char seriesID, double node, int giveint, double seconds, double bestint, double bestbnd);
+
+typedef struct sl_state_s
+{
+  gevHandle_t gev;
+  double tstart;
+  int nvars;
+} sl_state_t;
+
+static void mip_get_solution_cb(const cuopt_float_t *solution, const cuopt_float_t *objective_value,
+                                const cuopt_float_t *solution_bound, void *user_data);
+
+int main(int argc, char *argv[])
 {
   gmoHandle_t gmo=NULL;
   gevHandle_t gev=NULL;
   optHandle_t opt=NULL;
   cuopt_int_t status;
   char msg[256], filename[256];
-  
+
   if (!gevCreate(&gev,msg,sizeof(msg))) {
     printf("Error creating GEV: %s\n", msg);
     goto GAMSDONE;
@@ -125,6 +144,10 @@ main (int argc, char *argv[])
   cuopt_float_t* upper_bounds=NULL;
   char* constraint_sense=NULL;
   char* variable_types=NULL;
+  int has_integer_vars = 0;
+  fln_mip_trace[0] = '\0';
+  sl_state_t context;
+  int mipstart = 0;
 
   // Create solver settings
   status = cuOptCreateSolverSettings(&settings);
@@ -133,8 +156,46 @@ main (int argc, char *argv[])
     goto DONE;
   }
 
+  // Setup miptrace facility if option is enabled
+  if (optGetDefinedStr(opt, "miptrace"))
+  {
+    if (gmoModelType(gmo) == gmoProc_mip)
+    {
+      optGetStrStr(opt, "miptrace", fln_mip_trace);
+      char sval2[256];
+      if (mip_trace_open(fln_mip_trace, "cuOpt", gmoOptFile(gmo), gmoNameInput(gmo, sval2)))
+      {
+        printOut(gev, "Error opening trace file >%s<!", sval2);
+        goto DONE;
+      }
+    }
+    else
+      printOut(gev, "WARNING: Enabling a MIP trace is only allowed for model type MIP!\n");
+  }
+  if (fp_mip_trace)
+  {
+    context.gev = gev;
+    context.tstart = gevTimeJNow(gev);
+    context.nvars = num_variables;
+    mip_trace_line('S', 0, 0, 0, GMS_SV_NA, GMS_SV_NA);
+    status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_cb, &context);
+    if (status != CUOPT_SUCCESS) {
+      printOut(gev, "Error setting get-solution callback\n", status);
+      goto DONE;
+    }
+  }
+
+  // Check for MIP start feature
+  mipstart = optGetIntStr(opt, "mipstart");
+  if(mipstart && gmoModelType(gmo) != gmoProc_mip)
+  {
+    printOut(gev, "WARNING: Setting a MIP start is only allowed for model type MIP!\n");
+    mipstart = 0;
+  }
+
   // Set solver parameters with GAMS options
-  if (gevGetIntOpt(gev, gevThreadsRaw) != 0) {
+  if (gevGetIntOpt(gev, gevThreadsRaw) != 0)
+  {
     status = cuOptSetIntegerParameter(settings, CUOPT_NUM_CPU_THREADS, gevGetIntOpt(gev, gevThreadsRaw));
     if (status != CUOPT_SUCCESS) {
       printOut(gev, "Error setting number of CPU threads: %d\n", status);
@@ -184,7 +245,7 @@ main (int argc, char *argv[])
         printOut(gev, "Error setting integer option >%s<: %d\n", optname, status);
         goto DONE;
       }
-    } else {
+    } else if(data_type == optDataDouble) {
       status = cuOptSetFloatParameter(settings, optname, dval);
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error setting float option >%s<: %d\n", optname, status);
@@ -192,7 +253,65 @@ main (int argc, char *argv[])
       }
     }
   }
-  
+
+  // Try taking primal or dual (marginal) values from user (for LPs)
+  if (gmoModelType(gmo) == gmoProc_lp)
+  {
+    cuopt_int_t chosen_method;
+    status = cuOptGetIntegerParameter(settings, "method", &chosen_method);
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error querying method option.\n");
+      goto DONE;
+    }
+    // only when some PDLP is used and we have basis
+    if ((chosen_method == CUOPT_METHOD_PDLP || chosen_method == CUOPT_METHOD_CONCURRENT) && gmoHaveBasis(gmo))
+    {
+      int nvars = gmoN(gmo), nconstraints = gmoM(gmo);
+      double *lvls = (double *)malloc(sizeof(double) * nvars);
+      double *marginals = (double *)malloc(sizeof(double) * nconstraints);
+      gmoGetVarL(gmo, lvls);
+      gmoGetEquM(gmo, marginals);
+#if defined(CUOPT_INSTANTIATE_DOUBLE)
+      status = cuOptSetInitialPrimalSolution(settings, lvls, nvars);
+      if (status != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting primal solution for LP.\n");
+        goto DONE;
+      }
+      status = cuOptSetInitialDualSolution(settings, marginals, nconstraints);
+      if (status != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting dual solution for LP.\n");
+        goto DONE;
+      }
+#else
+      cuopt_float_t *lvlsf = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nvars);
+      cuopt_float_t *marginalsf = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nconstraints);
+      for (int i = 0; i < nvars; i++)
+        lvlsf[i] = (cuopt_float_t)lvls[i];
+      for (int i = 0; i < nconstraints; i++)
+        marginalsf[i] = (cuopt_float_t)marginals[i];
+      status = cuOptSetInitialPrimalSolution(settings, lvlsf, nvars);
+      if (status != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting primal solution for LP.\n");
+        goto DONE;
+      }
+      status = cuOptSetInitialDualSolution(settings, marginalsf, nconstraints);
+      if (status != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting dual solution for LP.\n");
+        goto DONE;
+      }
+      free(lvlsf);
+      free(marginalsf);
+#endif
+      free(lvls);
+      free(marginals);
+    }
+  }
+
   if (!optGetDefinedStr(opt, "prob_read")) {
     constraint_matrix_row_offsets = malloc((num_constraints+1)*sizeof(cuopt_int_t));
     constraint_matrix_column_indices = malloc(nnz*sizeof(cuopt_int_t));
@@ -242,7 +361,10 @@ main (int argc, char *argv[])
       switch (constraint_matrix_column_indices[j]) {
          case gmovar_X: variable_types[j] = CUOPT_CONTINUOUS; break;
          case gmovar_B:
-         case gmovar_I: variable_types[j] = CUOPT_INTEGER; break;
+         case gmovar_I:
+           variable_types[j] = CUOPT_INTEGER;
+           has_integer_vars = 1;
+           break;
          default: printOut(gev, "Known variable type %d\n", constraint_matrix_column_indices[j]);
       }
     }
@@ -325,6 +447,33 @@ main (int argc, char *argv[])
     }
   }
 
+  // Maybe add mip start
+  if(mipstart)
+  {
+    double *initial_levels = malloc(sizeof(double) * gmoN(gmo));
+    gmoGetVarL(gmo, initial_levels);
+  #ifdef CUOPT_INSTANTIATE_DOUBLE
+    status = cuOptAddMIPStart(settings, initial_levels, gmoN(gmo));
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error setting MIP start.\n");
+      goto DONE;
+    }
+#else
+    cuopt_float_t *initial_levelsf = malloc(sizeof(cuopt_float_t) * gmoN(gmo));
+    for (int i = 0; i < gmoN(gmo); i++)
+      initial_levelsf[i] = (cuopt_float_t)initial_levels[i];
+    status = cuOptAddMIPStart(settings, initial_levelsf, gmoN(gmo));
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error setting MIP start.\n");
+      goto DONE;
+    }
+    free(initial_levelsf);
+#endif
+    free(initial_levels);
+  }
+
   // Solve the problem
   status = cuOptSolve(problem, settings, &solution);
   if (status != CUOPT_SUCCESS) {
@@ -348,7 +497,7 @@ main (int argc, char *argv[])
   // Get solution information
   cuopt_float_t solution_time;
   cuopt_int_t termination_status;
-  cuopt_float_t objective_value;  
+  cuopt_float_t objective_value, solution_bound;
 
   status = cuOptGetTerminationStatus(solution, &termination_status);
   if (status != CUOPT_SUCCESS) {
@@ -379,14 +528,14 @@ main (int argc, char *argv[])
         gmoSolveStatSet(gmo, gmoSolveStat_SolverErr);
         break;
       case CUOPT_TERIMINATION_STATUS_PRIMAL_FEASIBLE:
-        if (gmoModelType(gmo) == gmoProc_mip) {
+        if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
           gmoModelStatSet(gmo, gmoModelStat_Integer);
         } else {
           gmoModelStatSet(gmo, gmoModelStat_Feasible);
         }
         break;
       case CUOPT_TERIMINATION_STATUS_FEASIBLE_FOUND:
-        if (gmoModelType(gmo) == gmoProc_mip) {
+        if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
           gmoModelStatSet(gmo, gmoModelStat_Integer);
         } else {
           gmoModelStatSet(gmo, gmoModelStat_Feasible);
@@ -412,13 +561,13 @@ main (int argc, char *argv[])
     }
     gmoSetHeadnTail(gmo, gmoHobjval, objective_value);
 
-    if (gmoModelType(gmo) == gmoProc_mip) {
-      status = cuOptGetSolutionBound(solution, &objective_value);
+    if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
+      status = cuOptGetSolutionBound(solution, &solution_bound);
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error getting solution bound: %d\n", status);
         goto DONE;
       }
-      gmoSetHeadnTail(gmo, gmoTmipbest, objective_value);
+      gmoSetHeadnTail(gmo, gmoTmipbest, solution_bound);
     }
 
     status = cuOptGetPrimalSolution(solution, objective_coefficients); // reuse n-vector
@@ -428,10 +577,16 @@ main (int argc, char *argv[])
     }
     gmoSetVarL(gmo, objective_coefficients);
 
+    if(fp_mip_trace)
+    {
+      double total_elapsed = (gevTimeJNow(gev) - context.tstart) * 3600.0 * 24.0;
+      mip_trace_line('E', 0, 1, total_elapsed, objective_value, solution_bound);
+    }
+
     int presolve, dual_postsolve;
     cuOptGetIntegerParameter(settings, "presolve", &presolve);
     cuOptGetIntegerParameter(settings, "dual_postsolve", &dual_postsolve);
-    if (gmoModelType(gmo) != gmoProc_mip && (!presolve || dual_postsolve) ) {
+    if (gmoModelType(gmo) != gmoProc_mip && !has_integer_vars && (!presolve || dual_postsolve) ) {
       status = cuOptGetReducedCosts(solution, objective_coefficients); // reuse n-vector
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error getting reduced cost: %d\n", status);
@@ -480,6 +635,9 @@ DONE:
   free(constraint_sense);
   free(variable_types);
 
+  if(fp_mip_trace)
+    mip_trace_close();
+
 GAMSDONE:
   gmoFree(&gmo);
   gevFree(&gev);
@@ -488,6 +646,83 @@ GAMSDONE:
   return 0;
 
 } /* main */
+
+int mip_trace_open(const char *fname, const char *solverID, const int optFileNum, const char *inputName)
+{
+  if (NULL != fp_mip_trace)
+    return 1; /* already open: error */
+
+  strcpy(fln_mip_trace, fname);
+  fp_mip_trace = fopen(fln_mip_trace, "w");
+  if (NULL == fp_mip_trace)
+    return 3;
+
+  strncpy(mip_trace_id, solverID, sizeof(mip_trace_id) - 1);
+  mip_trace_id[sizeof(mip_trace_id) - 1] = '\0';
+  mip_trace_seq = 1;
+  fprintf(fp_mip_trace, "* mip_trace_ file %s: ID = %s.%d Instance = %s\n", fln_mip_trace, mip_trace_id, optFileNum, inputName);
+  fprintf(fp_mip_trace, "* fields are lineNum, seriesID, node, seconds, bestFound, bestBound\n");
+  fflush(fp_mip_trace);
+  return 0;
+} /* mip_trace_open */
+
+int mip_trace_close()
+{
+  int rc;
+  if (NULL == fp_mip_trace)
+    return 2; /* already closed: error */
+  fprintf(fp_mip_trace, "* mip_trace_ file %s closed\n", fln_mip_trace);
+  rc = fclose(fp_mip_trace);
+  fp_mip_trace = NULL;
+  return (0 == rc) ? 0 : 1;
+} /* mip_trace_close */
+
+#define bnd_na(x) x == GMS_SV_NA || x == HUGE_VAL || x == -HUGE_VAL
+
+int mip_trace_line(char seriesID, double node, int giveint,
+                    double seconds, double bestint, double bestbnd)
+{
+  int rc;
+
+  if (NULL == fp_mip_trace)
+    return -1; /* not open: error */
+
+  if (giveint)
+  {
+    if (bnd_na(bestbnd))
+      rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, %.15g, na\n", mip_trace_seq,
+                   isalnum(seriesID) ? seriesID : 'X',
+                   node, seconds, bestint);
+    else
+      rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, %.15g, %.15g\n", mip_trace_seq,
+                   isalnum(seriesID) ? seriesID : 'X',
+                   node, seconds, bestint, bestbnd);
+  }
+  else
+  {
+    if (bnd_na(bestbnd))
+      rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, na, na\n", mip_trace_seq,
+                   isalnum(seriesID) ? seriesID : 'X',
+                   node, seconds);
+    else
+      rc = fprintf(fp_mip_trace, "%d, %c, %g, %.15g, na, %g\n", mip_trace_seq,
+                   isalnum(seriesID) ? seriesID : 'X',
+                   node, seconds, bestbnd);
+  }
+  fflush(fp_mip_trace);
+  mip_trace_seq++;
+
+  return rc;
+} /* mip_trace_line */
+
+static void mip_get_solution_cb(const cuopt_float_t *solution, const cuopt_float_t *objective_value,
+                                const cuopt_float_t *solution_bound, void *user_data){
+  sl_state_t *state = (sl_state_t *)user_data;
+  double elapsed = (gevTimeJNow(state->gev) - state->tstart) * 3600.0 * 24.0;
+  double obj = *objective_value;
+  double bnd = *solution_bound;
+  mip_trace_line('I', 0, 1, elapsed, obj, bnd);
+}
 
 #if 0
 t program for cuOpt linear programming solver
