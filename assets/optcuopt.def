@@ -8,7 +8,7 @@ presolve enumint 0 -1 1 1 Modify chosen presolve procedure
   0 1 off (disable presolve)
   1 1 papilo
   2 1 pslp
-dual_postsolve boolean 0 0 1 2 Controls whether dual postsolve is enabled. Disabling dual postsolve can improve solve time at the expense of not having access to the dual solution. Enabled by default for LP when presolve is enabled. This is not relevant for MIP problems
+dual_postsolve boolean 0 0 1 2 Controls whether dual postsolve is enabled when using Papilo presolver for LP problems
 time_limit integer 0 maxint 0 maxint 1 1 Controls the time limit in seconds after which the solver will stop and return the current solution (default GAMS ResLim)
 prob_read string 1 "" 1 1 Reads a problem from an MPS file 
 pdlp_solver_mode enumint 0 4 1 2 Controls the mode under which PDLP should operate
