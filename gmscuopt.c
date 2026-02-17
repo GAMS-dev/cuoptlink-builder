@@ -309,6 +309,7 @@ int main(int argc, char *argv[])
 #endif
       free(lvls);
       free(marginals);
+      printOut(gev, "Initial primal and dual solutions have been set.\n");
     }
   }
 
@@ -452,7 +453,7 @@ int main(int argc, char *argv[])
   {
     double *initial_levels = malloc(sizeof(double) * gmoN(gmo));
     gmoGetVarL(gmo, initial_levels);
-  #ifdef CUOPT_INSTANTIATE_DOUBLE
+#ifdef CUOPT_INSTANTIATE_DOUBLE
     status = cuOptAddMIPStart(settings, initial_levels, gmoN(gmo));
     if (status != CUOPT_SUCCESS)
     {
@@ -472,6 +473,7 @@ int main(int argc, char *argv[])
     free(initial_levelsf);
 #endif
     free(initial_levels);
+    printOut(gev, "MIP start has been set.\n");
   }
 
   // Solve the problem
