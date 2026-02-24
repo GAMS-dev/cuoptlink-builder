@@ -620,15 +620,12 @@ int main(int argc, char *argv[])
   else if (fp_mip_trace) // gmoModelStat(gmo) == gmoModelStat_NoSolutionReturned
   {
       double total_elapsed = (gevTimeJNow(gev) - context.tstart) * 3600.0 * 24.0;
+      solution_bound = GMS_SV_NA;
       if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars)
       {
         status = cuOptGetSolutionBound(solution, &solution_bound);
         if (status != CUOPT_SUCCESS)
-        {
-          printOut(gev, "Error getting solution bound: %d\n", status);
-          goto DONE;
-        }
-        gmoSetHeadnTail(gmo, gmoTmipbest, solution_bound);
+          solution_bound = GMS_SV_NA;
       }
       mip_trace_line('E', 0, 0, total_elapsed, GMS_SV_NA, solution_bound);
   }
