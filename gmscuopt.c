@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 
   cuopt_int_t num_variables = gmoN(gmo);
   cuopt_int_t num_constraints = gmoM(gmo);
-  cuopt_int_t nnz = gmoNZ(gmo);
+  int64_t nnz = gmoNZ64(gmo);
 
   cuopt_int_t* constraint_matrix_row_offsets=NULL;
   cuopt_int_t* constraint_matrix_column_indices=NULL;
