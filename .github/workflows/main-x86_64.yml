@@ -35,7 +35,7 @@ jobs:
           bash -c "source venvs/cu13/bin/activate && \
             pip install --upgrade pip -qq && \
             pip install --timeout=150 --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu13==26.4.0a81 -qq &&
-            pip install --force-reinstall wheels/cuopt_cu13-26.4.0-cp313-cp313-linux_x86_64.whl &&
+            pip install --force-reinstall wheels/cuopt_cu13-26.4.0-cp313-cp313-linux_x86_64.whl --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ --pre &&
             deactivate"
 
       # Get GAMS
