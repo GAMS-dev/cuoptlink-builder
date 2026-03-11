@@ -22,6 +22,14 @@ jobs:
         run: |
           apt-get update && apt-get install -y patchelf curl unzip zip gcc
 
+      # Download custom cuOpt wheel artifact
+      - name: Download and extract cuopt-int64 wheel
+        run: |
+          curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/GAMS-dev/cuopt-int64/actions/artifacts/5869680145/zip \
+            --output cuopt-int64-wheel.zip
+          unzip -q cuopt-int64-wheel.zip -d cuopt_wheel_dir
+
       # Get CUDA runtimes via pip
       - name: Set up python virtual environments with NVIDIA dependencies for CUDA 12 and CUDA 13 (respectively)
         run: |
@@ -35,7 +43,7 @@ jobs:
           bash -c "source venvs/cu13/bin/activate && \
             pip install --upgrade pip -qq && \
             pip install --timeout=150 --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu13==26.4.0a81 -qq &&
-            pip install --force-reinstall --no-deps wheels/cuopt_cu13-26.4.0-cp313-cp313-linux_x86_64.whl --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ --pre &&
+            pip install --force-reinstall --no-deps cuopt_wheel_dir/*.whl --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ --pre &&
             deactivate"
 
       # Get GAMS
