@@ -37,12 +37,12 @@ jobs:
           python -m venv venvs/cu12
           bash -c "source venvs/cu12/bin/activate && \
             pip install --upgrade pip -qq && \
-            pip install --timeout=150 --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu12==26.4.0a172 -qq &&
+            pip install --timeout=150 --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu12==26.4.0a172 &&
             deactivate"
           python -m venv venvs/cu13
           bash -c "source venvs/cu13/bin/activate && \
             pip install --upgrade pip -qq && \
-            pip install --timeout=150 --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu13==26.4.0a172 -qq && deactivate"
+            pip install --timeout=150 --pre --extra-index-url=https://pypi.nvidia.com --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ cuopt-cu13==26.4.0a172 && deactivate"
 # pip install --force-reinstall --no-deps cuopt_wheel_dir/*.whl --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ --pre && deactivate"
 
       # Get GAMS
