@@ -22,6 +22,11 @@ method enumint 0 0 1 2 Controls the method to solve the linear programming probl
  1 1 pdlp Use the PDLP method.
  2 1 dual_simplex Use the dual simplex method.
  3 1 method_barrier Use the barrier (interior-point) method.
+ pdlp_precision enumint 0 -1 1 2 PDLP precision mode constants
+ -1 1 default By default, PDLP operates in the native precision of the problem type (FP64 for double-precision problems).
+  0 1 single Run PDLP internally in FP32, with automatic conversion of inputs and outputs. FP32 uses half the memory and allows PDHG iterations to be on average twice as fast, but may require more iterations to converge. Compatible with crossover (solution is converted back to FP64 before crossover) and concurrent mode (PDLP runs in FP32 while other solvers run in FP64).
+  1 1 double Explicitly run in FP64 (same as default for double-precision problems).
+  2 1 mixed Use mixed precision SpMV during PDHG iterations. The constraint matrix is stored in FP32 while vectors and compute type remain in FP64, improving SpMV performance with limited impact on convergence. Convergence checking and restart logic always use the full FP64 matrix.
 iteration_limit integer 0 maxint 0 maxint 1 2 Controls the iteration limit after which the solver will stop and return the current solution (default GAMS IterLim)
 infeasibility_detection boolean 0 0 1 2 Controls whether PDLP should detect infeasibility
 strict_infeasibility boolean 0 0 1 2 Controls the strict infeasibility mode in PDLP

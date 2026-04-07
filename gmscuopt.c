@@ -544,6 +544,7 @@ int main(int argc, char *argv[])
           gmoModelStatSet(gmo, gmoModelStat_Feasible);
         }
         break;
+      case CUOPT_TERMINATION_STATUS_UNBOUNDED_OR_INFEASIBLE:
       default:
         gmoSolveStatSet(gmo, gmoSolveStat_Solver);
     }
