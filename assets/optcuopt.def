@@ -79,10 +79,34 @@ mip_mixed_integer_rounding_cuts integer 0 -1 -1 1 1 3 Controls whether to use mi
 mip_mixed_integer_gomory_cuts integer 0 -1 -1 1 1 3 Controls whether to use mixed integer Gomory cuts
 mip_strong_chvatal_gomory_cuts integer 0 -1 -1 1 1 3 Controls whether to use strong Chvatal-Gomory cuts
 mip_knapsack_cuts integer 0 -1 -1 1 1 3 Controls whether to use knapsack cuts
+mip_implied_bound_cuts integer 0 -1 -1 1 0 3 Controls whether to enable implied bound cuts (-1 auto/default, 0 off, >0 on)
+mip_clique_cuts integer 0 -1 -1 1 0 3 Controls whether to enable clique cuts (-1 auto/default, 0 off, >0 on).
 mip_cut_change_threshold double 0 1e-03 0 maxdouble 1 3 Controls the threshold for the improvement in the dual bound per cut pass
 mip_cut_min_orthogonality double 0 0.5 0 maxdouble 1 3 Controls the minimum orthogonality required for a cut to be added to the LP relaxation
 mip_reduced_cost_strengthening integer 0 -1 -1 2 1 3 Controls whether to use reduced-cost strengthening
 mip_reliability_branching integer 0 -1 -1 maxint 1 3 Controls the reliablity branching mode
+mip_strong_branching_simplex_iteration_limit integer 0 -1 -1 maxint 0 3 Controls the strong branching simplex iteration limit
+mip_hyper_heuristic_population_size integer 0 32 0 maxint 0 3 Controls maximum number of solutions in pool
+mip_hyper_heuristic_num_cpufj_threads integer 0 8 0 maxint 0 3 Controls parallel CPU FJ climbers
+mip_hyper_heuristic_presolve_time_ratio double 0 0.1 0 1 0 3 Controls fraction of total time for presolve
+mip_hyper_heuristic_presolve_max_time double 0 60 0 maxdouble 0 3 Controls the hard cap on presolve seconds
+mip_hyper_heuristic_root_lp_time_ratio double 0 0.1 0 1 0 3 Controls fraction of total time for root LP
+mip_hyper_heuristic_root_lp_max_time double 0 15 0 maxdouble 0 3 Controls the hard cap on root LP seconds
+mip_hyper_heuristic_rins_time_limit double 0 3 0 maxdouble 0 3 Controls per-call RINS sub-MIP time
+mip_hyper_heuristic_rins_max_time_limit double 0 20 0 maxdouble 0 3 Controls ceiling for RINS adaptive time budget
+mip_hyper_heuristic_rins_fix_rate double 0 0.5 0 1 0 3 Controls RINS variable fix rate
+mip_hyper_heuristic_stagnation_trigger integer 0 3 0 maxint 0 3 Controls FP loops w/o improvement before recombination
+mip_hyper_heuristic_max_iterations_without_improvement integer 0 8 0 maxint 0 3 Controls diversity step depth after stagnation
+mip_hyper_heuristic_initial_infeasibility_weight double 0 1000 0 maxdouble 0 3 Controls constraint violation penalty seed
+mip_hyper_heuristic_n_of_minimums_for_exit integer 0 7000 0 maxint 0 3 Controls FJ baseline local-minima exit threshold
+mip_hyper_heuristic_enabled_recombiners integer 0 15 0 maxint 0 3 Controls bitmask: 1=BP 2=FP 4=LS 8=SubMIP
+mip_hyper_heuristic_cycle_detection_length integer 0 30 0 maxint 0 3 Controls FP assignment cycle ring buffer
+mip_hyper_heuristic_relaxed_lp_time_limit double 0 1 0 maxdouble 0 3 Controls base relaxed LP time cap in heuristics
+mip_hyper_heuristic_related_vars_time_limit double 0 30 0 maxdouble 0 3 Controls time for related-variable structure build
+mip_scaling enumint 0 1 1 3 MIP scaling mode double 
+ 0 1 no scaling
+ 1 1 full scaling (objective + row), default
+ 2 1 row scaling only (no objective scaling)
 *
 * Groups
 *
