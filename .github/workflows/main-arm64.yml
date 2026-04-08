@@ -71,6 +71,7 @@ jobs:
       # Collect dependencies for link and runtime convenience archive
       - name: Prepare release artifact and runtime bundle
         run: |
+          ls venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/
           mkdir release-cu12
           cp gmscuopt-cu12.out release-cu12/gmscuopt.out
           cp assets/* release-cu12/
