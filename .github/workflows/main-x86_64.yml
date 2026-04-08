@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Install dependencies
         run: |
@@ -126,25 +126,25 @@ jobs:
 
       # Upload artifacts
       - name: Upload CUDA 12 link artifact to GitHub Actions (always)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cuopt-link-cu12
           path: release-cu12/
 
       - name: Upload CUDA 12 runtime artifact to GitHub Actions (always)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cu12-runtime
           path: runtime-cu12/
 
       - name: Upload CUDA 13 link artifact to GitHub Actions (always)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cuopt-link-cu13
           path: release-cu13/
 
       - name: Upload CUDA 13 runtime artifact to GitHub Actions (always)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cu13-runtime
           path: runtime-cu13/
