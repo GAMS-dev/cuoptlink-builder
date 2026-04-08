@@ -1,6 +1,7 @@
 *
 * optcuopt.def
 *
+* name type usermap default low high visible group
 num_cpu_threads integer 0 -1 -1 maxint 1 1 Controls the number of CPU threads used in the LP and MIP solvers (default GAMS Threads)
 num_gpus integer 0 1 1 2 1 2 Controls the number of GPUs to use for the solve. This setting is only relevant for LP problems that uses concurrent mode and supports up to 2 GPUs at the moment. Using this mode will run PDLP and barrier in parallel on different GPUs to avoid sharing single GPU resources.
 presolve enumint 0 -1 1 1 Controls which presolver (if any) to use for presolve reductions.
