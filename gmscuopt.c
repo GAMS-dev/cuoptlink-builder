@@ -134,6 +134,7 @@ int main(int argc, char *argv[])
   cuopt_int_t num_variables = gmoN(gmo);
   cuopt_int_t num_constraints = gmoM(gmo);
   cuopt_int_t nnz = gmoNZ(gmo);
+  //int64_t nnz = gmoNZ64(gmo);
 
   cuopt_int_t* constraint_matrix_row_offsets=NULL;
   cuopt_int_t* constraint_matrix_column_indices=NULL;
@@ -511,38 +512,39 @@ int main(int argc, char *argv[])
   gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
   if (!optGetDefinedStr(opt, "prob_read")) {
     switch (termination_status) {
-      case CUOPT_TERIMINATION_STATUS_OPTIMAL:
+      case CUOPT_TERMINATION_STATUS_OPTIMAL:
         gmoModelStatSet(gmo, gmoModelStat_OptimalGlobal);
         break;
-      case CUOPT_TERIMINATION_STATUS_INFEASIBLE:
+      case CUOPT_TERMINATION_STATUS_INFEASIBLE:
         gmoModelStatSet(gmo, gmoModelStat_InfeasibleGlobal);
         break;
-      case CUOPT_TERIMINATION_STATUS_UNBOUNDED:
+      case CUOPT_TERMINATION_STATUS_UNBOUNDED:
         gmoModelStatSet(gmo, gmoModelStat_Unbounded);
         break;
-      case CUOPT_TERIMINATION_STATUS_ITERATION_LIMIT:
+      case CUOPT_TERMINATION_STATUS_ITERATION_LIMIT:
         gmoSolveStatSet(gmo, gmoSolveStat_Iteration);
         break;
-      case CUOPT_TERIMINATION_STATUS_TIME_LIMIT:
+      case CUOPT_TERMINATION_STATUS_TIME_LIMIT:
         gmoSolveStatSet(gmo, gmoSolveStat_Resource);
         break;
-      case CUOPT_TERIMINATION_STATUS_NUMERICAL_ERROR:
+      case CUOPT_TERMINATION_STATUS_NUMERICAL_ERROR:
         gmoSolveStatSet(gmo, gmoSolveStat_SolverErr);
         break;
-      case CUOPT_TERIMINATION_STATUS_PRIMAL_FEASIBLE:
+      case CUOPT_TERMINATION_STATUS_PRIMAL_FEASIBLE:
         if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
           gmoModelStatSet(gmo, gmoModelStat_Integer);
         } else {
           gmoModelStatSet(gmo, gmoModelStat_Feasible);
         }
         break;
-      case CUOPT_TERIMINATION_STATUS_FEASIBLE_FOUND:
+      case CUOPT_TERMINATION_STATUS_FEASIBLE_FOUND:
         if (gmoModelType(gmo) == gmoProc_mip && has_integer_vars) {
           gmoModelStatSet(gmo, gmoModelStat_Integer);
         } else {
           gmoModelStatSet(gmo, gmoModelStat_Feasible);
         }
         break;
+      case CUOPT_TERMINATION_STATUS_UNBOUNDED_OR_INFEASIBLE:
       default:
         gmoSolveStatSet(gmo, gmoSolveStat_Solver);
     }
@@ -751,21 +753,21 @@ t program for cuOpt linear programming solver
 const char* termination_status_to_string(cuopt_int_t termination_status)
 {
   switch (termination_status) {
-    case CUOPT_TERIMINATION_STATUS_OPTIMAL:
+    case CUOPT_TERMINATION_STATUS_OPTIMAL:
       return "Optimal";
-    case CUOPT_TERIMINATION_STATUS_INFEASIBLE:
+    case CUOPT_TERMINATION_STATUS_INFEASIBLE:
       return "Infeasible";
-    case CUOPT_TERIMINATION_STATUS_UNBOUNDED:
+    case CUOPT_TERMINATION_STATUS_UNBOUNDED:
       return "Unbounded";
-    case CUOPT_TERIMINATION_STATUS_ITERATION_LIMIT:
+    case CUOPT_TERMINATION_STATUS_ITERATION_LIMIT:
       return "Iteration limit";
-    case CUOPT_TERIMINATION_STATUS_TIME_LIMIT:
+    case CUOPT_TERMINATION_STATUS_TIME_LIMIT:
       return "Time limit";
-    case CUOPT_TERIMINATION_STATUS_NUMERICAL_ERROR:
+    case CUOPT_TERMINATION_STATUS_NUMERICAL_ERROR:
       return "Numerical error";
-    case CUOPT_TERIMINATION_STATUS_PRIMAL_FEASIBLE:
+    case CUOPT_TERMINATION_STATUS_PRIMAL_FEASIBLE:
       return "Primal feasible";
-    case CUOPT_TERIMINATION_STATUS_FEASIBLE_FOUND:
+    case CUOPT_TERMINATION_STATUS_FEASIBLE_FOUND:
       return "Feasible found";
     default:
       return "Unknown";
