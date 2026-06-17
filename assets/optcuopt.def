@@ -9,8 +9,10 @@ presolve enumint 0 -1 1 1 Controls which presolver (if any) to use for presolve 
   0 1 off (disable presolve)
   1 1 papilo
   2 1 pslp
+mip_probing
 dual_postsolve boolean 0 0 1 2 Controls whether dual postsolve is enabled when using Papilo presolver for LP problems. Enabled by default for LP when Papilo presolve is selected.
 time_limit integer 0 maxint 0 maxint 1 1 Controls the time limit in seconds after which the solver will stop and return the current solution (default GAMS ResLim)
+node_limit
 prob_read string 1 "" 1 1 Reads a problem from an MPS file 
 pdlp_solver_mode enumint 0 4 1 2 Controls the mode under which PDLP should operate
  0 1 stable1 First obsolete legacy predecessor of stable3
@@ -57,6 +59,8 @@ barrier_dual_initial_point enumint 0 -1 1 4 Controls the method used to compute 
  -1 1 automatic (default) cuOpt selects the best method
  0 1 use an initial point from a heuristic approach based on the paper "On Implementing Mehrotra’s Predictor–Corrector Interior-Point Method for Linear Programming" (SIAM J. Optimization, 1992) by Lustig, Martsten, Shanno.
  1 1 use an initial point from solving a least squares problem that minimizes the norms of the dual variables and reduced costs while statisfying the dual equality constraints.
+barrier_iterative_refinement
+barrier_step_scale
 absolute_primal_tolerance double 0 0.0001 0 maxdouble 1 2 Controls the absolute primal tolerance used in PDLP's primal feasibility check
 relative_primal_tolerance double 0 0.0001 0 maxdouble 1 2 Controls the relative primal tolerance used in PDLP's primal feasibility check
 absolute_dual_tolerance double 0 0.0001 0 maxdouble 1 2 Controls the absolute dual tolerance used in PDLP's dual feasibility check
@@ -67,11 +71,12 @@ primal_infeasible_tolerance double 0 1e-08 0 maxdouble 0 2 Unknown
 dual_infeasible_tolerance double 0 1e-08 0 maxdouble 0 2 Unknown
 miptrace string 0 "" 1 3 filename of MIP trace file which logs the best found (incumbent) and best bound over time
 mipstart boolean -1 0 1 3 whether it should be tried to use the initial variable levels as initial MIP solution
-mip_heuristics_only boolean 0 0 1 3 Controls if only the GPU heuristics should be run       
+mip_heuristics_only boolean 0 0 1 3 Controls if only the GPU heuristics should be run
 mip_scaling enumint 0 1 1 3 Controls if scaling should be applied to the MIP problem
  0 1 no scaling
  1 1 full scaling (objective + row), default
  2 1 row scaling only (no objective scaling)
+mip_symmetry
 mip_absolute_tolerance double 0 0.0001 0 maxdouble 1 3 Controls the MIP absolute tolerance
 mip_relative_tolerance double 0 0.0001 0 maxdouble 1 3 Controls the MIP relative tolerance
 mip_integrality_tolerance double 0 1e-05 0 maxdouble 1 3 Controls the MIP integrality tolerance
@@ -82,8 +87,10 @@ mip_mixed_integer_rounding_cuts integer 0 -1 -1 1 1 3 Controls whether to use mi
 mip_mixed_integer_gomory_cuts integer 0 -1 -1 1 1 3 Controls whether to use mixed integer Gomory cuts
 mip_strong_chvatal_gomory_cuts integer 0 -1 -1 1 1 3 Controls whether to use strong Chvatal-Gomory cuts
 mip_knapsack_cuts integer 0 -1 -1 1 1 3 Controls whether to use knapsack cuts
+mip_flow_cover_cuts
 mip_implied_bound_cuts integer 0 -1 -1 1 1 3 Controls whether to enable implied bound cuts (-1 auto/default, 0 off, >0 on)
 mip_clique_cuts integer 0 -1 -1 1 1 3 Controls whether to enable clique cuts (-1 auto/default, 0 off, >0 on).
+mip_objective_step boolean 0 0 1 3 Controls whether cuOpt automatically detects and exploits discrete step structure in objective to tighten dual bound (0 off, 1 on/default).
 mip_cut_change_threshold double 0 1e-03 0 maxdouble 1 3 Controls the threshold for the improvement in the dual bound per cut pass
 mip_cut_min_orthogonality double 0 0.5 0 maxdouble 1 3 Controls the minimum orthogonality required for a cut to be added to the LP relaxation
 mip_reduced_cost_strengthening integer 0 -1 -1 2 1 3 Controls whether to use reduced-cost strengthening
@@ -106,6 +113,19 @@ mip_hyper_heuristic_enabled_recombiners integer 0 15 0 maxint 1 3 Controls bitma
 mip_hyper_heuristic_cycle_detection_length integer 0 30 0 maxint 1 3 Controls FP assignment cycle ring buffer
 mip_hyper_heuristic_relaxed_lp_time_limit double 0 1 0 maxdouble 1 3 Controls base relaxed LP time cap in heuristics
 mip_hyper_heuristic_related_vars_time_limit double 0 30 0 maxdouble 1 3 Controls time for related-variable structure build
+mip_hyper_diving_line_search
+mip_hyper_diving_pseudocost
+mip_hyper_diving_guided
+mip_hyper_diving_coefficient
+mip_hyper_diving_farkas
+mip_hyper_diving_vector_length
+mip_hyper_diving_min_node_depth
+mip_hyper_diving_node_limit
+mip_hyper_diving_iteration_limit_factor
+mip_hyper_diving_backtrack_limit
+mip_hyper_diving_show_type
+mip_semicontinuous_big_m double 0 0 0 maxdouble 1 3 Controls the Big-M coefficient used when linearizing semi-continuous variable constraints
+
 *
 * Groups
 *
