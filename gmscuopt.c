@@ -127,6 +127,10 @@ int main(int argc, char *argv[])
   gmoSolveStatSet(gmo, gmoSolveStat_Capability);
   gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
 
+  /* Activate Q-mode for QCP and MIQCP models */
+  if (gmoModelType(gmo) == gmoProc_qcp || gmoModelType(gmo) == gmoProc_miqcp)
+    gmoUseQSet(gmo, 1);
+
   cuOptOptimizationProblem problem = NULL;
   cuOptSolverSettings settings = NULL;
   cuOptSolution solution = NULL;
@@ -577,7 +581,13 @@ int main(int argc, char *argv[])
         {
           q_row[k] = (cuopt_int_t)temp_q_row[k];
           q_col[k] = (cuopt_int_t)temp_q_col[k];
-          q_coef[k] = (cuopt_float_t)temp_q_coef[k];
+
+          // GAMS provides hessian matrix. Diagonal elements must be halved!
+          if (q_row[k] == q_col[k])
+            q_coef[k] = (cuopt_float_t)(temp_q_coef[k] / 2.0);
+          // non-diagonal elements can be passed through directly to cuOpt
+          else
+            q_coef[k] = (cuopt_float_t)temp_q_coef[k];
         }
 
         status = cuOptAddQuadraticConstraint(
