@@ -1,7 +1,15 @@
 #!/bin/bash
 
-# Define the array of GAMS model base names
-MODELS=("flowshop" "knapsack" "qcp" "qobj" "trnsport")
+MODELS=()
+# Loop through all .gms files in the current working directory
+for file in *.gms; do
+    # Check if the file actually exists (handles the case where no .gms files are present)
+    [ -e "$file" ] || continue
+    # Strip the '.gms' extension and append the base name to the array
+    MODELS+=("${file%.gms}")
+done
+# Optional: Print the array to verify it worked
+echo "Models found: ${MODELS[@]}"
 
 # Tolerance for floating point comparison
 TOLERANCE="0.0001"

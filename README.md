@@ -6,6 +6,8 @@ This project builds and packages the [GAMS](https://gams.com/) and [GAMSPy](http
 
 You can get more details and tips by reading the blog post ["GPU-Accelerated Optimization with GAMS and NVIDIA cuOpt"](https://www.gams.com/blog/2025/09/gpu-accelerated-optimization-with-gams-and-nvidia-cuopt/).
 
+Supported model types are LP, MIP, RMIP, QCP, MIQCP, RMIQCP.
+
 ## Requirements
 
 - **Operating System:** Linux, Windows 11 through WSL2
@@ -34,5 +36,11 @@ gams trnsport lp cuopt
 
 ## Examples
 
+### Notebooks
+
 - [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb) for CUDA 12 on x86_64
 - [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt_cu13.ipynb) for CUDA 13 on x86_64
+
+### GAMS models
+
+Various GAMS models can be found in subfolder `examples/models` and are used to verify the solver link.
