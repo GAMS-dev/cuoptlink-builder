@@ -515,12 +515,6 @@ int main(int argc, char *argv[])
       goto DONE;
     }
 
-    status = gmoGetRhs(gmo, rhs);
-    if (status) {
-      printOut(gev, "gmoGetRhs failed. Status: %d\n", status);
-      goto DONE;
-    }
-
     status = cuOptCreateProblem(
         num_linear_constraints, // Use mapped linear size
         num_variables,
@@ -777,65 +771,67 @@ int main(int argc, char *argv[])
       mip_trace_line('E', 0, 1, total_elapsed, objective_value, solution_bound);
     }
 
-    int presolve, dual_postsolve;
+    cuopt_int_t presolve = 0, dual_postsolve = 0;
     cuOptGetIntegerParameter(settings, "presolve", &presolve);
     cuOptGetIntegerParameter(settings, "dual_postsolve", &dual_postsolve);
 
-    // Check if we should extract duals
-    if ((gmoModelType(gmo) != gmoProc_mip && gmoModelType(gmo) != gmoProc_miqcp) && !has_integer_vars && (!presolve || dual_postsolve))
-    {
-      status = cuOptGetReducedCosts(solution, objective_coefficients); // reuse n-vector
-      if (status != CUOPT_SUCCESS)
-      {
-        printOut(gev, "Error getting reduced cost: %d\n", status);
-        goto DONE;
-      }
-      if (gmoSense(gmo) == gmoObj_Max)
-      { // patch duals for max problem
-        for (int j = 0; j < num_variables; j++)
-        {
-          objective_coefficients[j] *= -1.0;
-        }
-      }
-      gmoSetVarM(gmo, objective_coefficients);
+    int is_qcp_model = gmoModelType(gmo) == gmoProc_qcp || gmoModelType(gmo) == gmoProc_miqcp;
 
-      // Extract duals using explicit mapping array
-      cuopt_float_t *raw_duals = malloc(num_constraints * sizeof(cuopt_float_t));
-      status = cuOptGetDualSolution(solution, raw_duals);
-      if (status != CUOPT_SUCCESS)
-      {
-        printOut(gev, "Error getting dual solution: %d\n", status);
-        free(raw_duals);
-        goto DONE;
-      }
-
-      double *final_duals = malloc(num_constraints * sizeof(double));
-      for (int i = 0; i < num_constraints; i++)
-      {
-        if (gams2cuopt_row)
+    // Only extract duals, when it's neither MIP nor QCP
+    // cuOpt doesn't support duals for QCP for now
+    if (!is_qcp_model && gmoModelType(gmo) != gmoProc_mip && !has_integer_vars && (!presolve || dual_postsolve)) {
+        status = cuOptGetReducedCosts(solution, objective_coefficients); // reuse n-vector
+        if (status != CUOPT_SUCCESS)
         {
-          final_duals[i] = raw_duals[gams2cuopt_row[i]];
+          printOut(gev, "Error getting reduced cost: %d\n", status);
+          goto DONE;
         }
-        else
-        {
-          final_duals[i] = raw_duals[i]; // Fallback if directly read from MPS
-        }
-
         if (gmoSense(gmo) == gmoObj_Max)
-        {
-          final_duals[i] *= -1.0; // patch duals for max problem
+        { // patch duals for max problem
+          for (int j = 0; j < num_variables; j++)
+          {
+            objective_coefficients[j] *= -1.0;
+          }
         }
+        gmoSetVarM(gmo, objective_coefficients);
+
+        // Extract duals using explicit mapping array
+        cuopt_float_t *raw_duals = malloc(num_constraints * sizeof(cuopt_float_t));
+        status = cuOptGetDualSolution(solution, raw_duals);
+        if (status != CUOPT_SUCCESS)
+        {
+          printOut(gev, "Error getting dual solution: %d\n", status);
+          free(raw_duals);
+          goto DONE;
+        }
+
+        double *final_duals = malloc(num_constraints * sizeof(double));
+        for (int i = 0; i < num_constraints; i++)
+        {
+          if (gams2cuopt_row)
+          {
+            final_duals[i] = raw_duals[gams2cuopt_row[i]];
+          }
+          else
+          {
+            final_duals[i] = raw_duals[i]; // Fallback if directly read from MPS
+          }
+
+          if (gmoSense(gmo) == gmoObj_Max)
+          {
+            final_duals[i] *= -1.0; // patch duals for max problem
+          }
+        }
+        gmoSetEquM(gmo, final_duals);
+        free(raw_duals);
+        free(final_duals);
       }
-      gmoSetEquM(gmo, final_duals);
-      free(raw_duals);
-      free(final_duals);
+      else
+      {
+        gmoSetHeadnTail(gmo, gmoHmarginals, 0.0); // no duals for mip
+      }
+      gmoCompleteSolution(gmo);
     }
-    else
-    {
-      gmoSetHeadnTail(gmo, gmoHmarginals, 0.0); // no duals for mip
-    }
-    gmoCompleteSolution(gmo);
-  }
   else if (fp_mip_trace) // gmoModelStat(gmo) == gmoModelStat_NoSolutionReturned
   {
     double total_elapsed = (gevTimeJNow(gev) - context.tstart) * 3600.0 * 24.0;
