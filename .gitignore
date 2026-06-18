@@ -1,9 +1,7 @@
 .vscode/
 /venv/*
 /release/*
-*.gms
 *.lst
 *.out
-cuopt.opt
 /examples/cu*runtime.zip
 /examples/cuopt-link-release-cu*.zip

@@ -537,6 +537,53 @@ int main(int argc, char *argv[])
       goto DONE;
     }
 
+    if (is_qcp)
+    {
+      int obj_qnz = gmoObjQNZ(gmo);
+      if (obj_qnz > 0)
+      {
+        int *temp_q_row = malloc(obj_qnz * sizeof(int));
+        int *temp_q_col = malloc(obj_qnz * sizeof(int));
+        double *temp_q_coef = malloc(obj_qnz * sizeof(double));
+
+        // Extract the quadratic objective coefficients from GAMS
+        gmoGetObjQ(gmo, temp_q_row, temp_q_col, temp_q_coef);
+
+        cuopt_int_t *q_row = malloc(obj_qnz * sizeof(cuopt_int_t));
+        cuopt_int_t *q_col = malloc(obj_qnz * sizeof(cuopt_int_t));
+        cuopt_float_t *q_coef = malloc(obj_qnz * sizeof(cuopt_float_t));
+
+        for (int k = 0; k < obj_qnz; k++)
+        {
+          q_row[k] = (cuopt_int_t)temp_q_row[k];
+          q_col[k] = (cuopt_int_t)temp_q_col[k];
+
+          // GAMS provides hessian matrix. Diagonal elements must be halved!
+          if (q_row[k] == q_col[k])
+            q_coef[k] = (cuopt_float_t)(temp_q_coef[k] / 2.0);
+          // Non-diagonal elements can be passed through directly to cuOpt
+          else
+            q_coef[k] = (cuopt_float_t)temp_q_coef[k];
+        }
+
+        // Apply the quadratic terms to the objective using the cuOpt API
+        status = cuOptSetQuadraticObjective(problem, obj_qnz, q_row, q_col, q_coef);
+
+        free(temp_q_row);
+        free(temp_q_col);
+        free(temp_q_coef);
+        free(q_row);
+        free(q_col);
+        free(q_coef);
+
+        if (status != CUOPT_SUCCESS)
+        {
+          printOut(gev, "Error setting quadratic objective: %d\n", status);
+          goto DONE;
+        }
+      }
+    }
+
     // Append the quadratic constraints dynamically
     for (int i = 0; i < num_constraints; i++)
     {
