@@ -419,7 +419,7 @@ int main(int argc, char *argv[])
         orig_sense[i] = CUOPT_GREATER_THAN;
         break;
       default:
-        printOut(gev, "Known row type %d\n", temp_equ_types[i]);
+        printOut(gev, "Unknown row type %d\n", temp_equ_types[i]);
       }
     }
     free(temp_equ_types);
@@ -450,7 +450,7 @@ int main(int argc, char *argv[])
         has_integer_vars = 1;
         break;
       default:
-        printOut(gev, "Known variable type %d\n", temp_var_types[j]);
+        printOut(gev, "Unknown variable type %d\n", temp_var_types[j]);
       }
     }
     free(temp_var_types);
@@ -732,7 +732,7 @@ int main(int argc, char *argv[])
 
   status = cuOptGetTerminationStatus(solution, &termination_status);
   if (status != CUOPT_SUCCESS) {
-    printOut(gev, "Error getting termination status: %d\n", status);
+    printOut(gev, "Error getting termination status: %d\n", status);    
     goto DONE;
   }
 
@@ -888,16 +888,16 @@ int main(int argc, char *argv[])
         gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
       }
     }
-    // User explicitly forces marginals on MIQCP / MIP / Problems with discrete vars (requestMarginals = 1)
-    else if (request_marginals == 1)
+    // User explicitly forces marginals on MIQCP / MIP / Problems with discrete vars (requestMarginals = 1 or 2)
+    else if (request_marginals == 1 || request_marginals == 2)
     {
       if (gmoModelType(gmo) == gmoProc_miqcp || has_integer_vars)
       {
-        printOut(gev, "WARNING: requestMarginals=1 ignored. cuOpt does not currently support dual solutions for MIQCP/discrete models.\n");
+        printOut(gev, "WARNING: cuOpt does not currently support dual solutions for MIQCP/discrete models.\n");
       }
       else
       {
-        printOut(gev, "WARNING: requestMarginals=1 ignored. cuOpt link does not currently support continuous subproblem solves for MIP marginals.\n");
+        printOut(gev, "WARNING: cuOpt link does not currently support continuous subproblem solves for MIP marginals.\n");
       }
       gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
     }
