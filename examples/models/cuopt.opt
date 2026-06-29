@@ -1,0 +1,5 @@
+method 1
+pdlp_solver_mode 1
+mip_scaling 2
+pdlp_precision 1
+mip_implied_bound_cuts 1

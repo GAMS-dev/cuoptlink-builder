@@ -10,3 +10,6 @@ solverConfig:
         - LP
         - RMIP
         - MIP
+        - QCP
+        - MIQCP
+        - RMIQCP
