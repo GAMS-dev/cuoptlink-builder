@@ -818,15 +818,24 @@ int main(int argc, char *argv[])
       mip_trace_line('E', 0, 1, total_elapsed, objective_value, solution_bound);
     }
 
+    int request_marginals = gevGetIntOpt(gev, gevRequestMarginals);
     cuopt_int_t presolve = 0, dual_postsolve = 0;
     cuOptGetIntegerParameter(settings, "presolve", &presolve);
     cuOptGetIntegerParameter(settings, "dual_postsolve", &dual_postsolve);
 
-    int is_qcp_model = gmoModelType(gmo) == gmoProc_qcp || gmoModelType(gmo) == gmoProc_miqcp;
+    int is_mip_model = gmoModelType(gmo) == gmoProc_mip || has_integer_vars;
+    int is_linear_qcp = gmoModelType(gmo) == gmoProc_qcp && !has_integer_vars;
 
-    // Only extract duals, when it's neither MIP nor QCP
-    // cuOpt doesn't support duals for QCP for now
-    if (!is_qcp_model && gmoModelType(gmo) != gmoProc_mip && !has_integer_vars && (!presolve || dual_postsolve)) {
+    // Only extract duals, when it's neither MIP nor QCP (and marginals aren't explicitly NOT WANTED with requestMarginals=0)
+    if (!request_marginals)
+    {
+      gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
+    }
+    // Linear/quadratic and fully continuous
+    else if ((gmoModelType(gmo) == gmoProc_lp || is_linear_qcp) && !is_mip_model)
+    {
+      if (!presolve || dual_postsolve)
+      {
         status = cuOptGetReducedCosts(solution, objective_coefficients); // reuse n-vector
         if (status != CUOPT_SUCCESS)
         {
@@ -834,7 +843,8 @@ int main(int argc, char *argv[])
           goto DONE;
         }
         if (gmoSense(gmo) == gmoObj_Max)
-        { // patch duals for max problem
+        {
+          // patch duals for max problem
           for (int j = 0; j < num_variables; j++)
           {
             objective_coefficients[j] *= -1.0;
@@ -875,10 +885,30 @@ int main(int argc, char *argv[])
       }
       else
       {
-        gmoSetHeadnTail(gmo, gmoHmarginals, 0.0); // no duals for mip
+        gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
       }
-      gmoCompleteSolution(gmo);
     }
+    // User explicitly forces marginals on MIQCP / MIP / Problems with discrete vars (requestMarginals = 1)
+    else if (request_marginals == 1)
+    {
+      if (gmoModelType(gmo) == gmoProc_miqcp || has_integer_vars)
+      {
+        printOut(gev, "WARNING: requestMarginals=1 ignored. cuOpt does not currently support dual solutions for MIQCP/discrete models.\n");
+      }
+      else
+      {
+        printOut(gev, "WARNING: requestMarginals=1 ignored. cuOpt link does not currently support continuous subproblem solves for MIP marginals.\n");
+      }
+      gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
+    }
+    // Default fallback for MIP / MIQCP when requestMarginals is -1 (inexpensive only)
+    else
+    {
+      gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
+    }
+
+    gmoCompleteSolution(gmo);
+  }
   else if (fp_mip_trace) // gmoModelStat(gmo) == gmoModelStat_NoSolutionReturned
   {
     double total_elapsed = (gevTimeJNow(gev) - context.tstart) * 3600.0 * 24.0;
