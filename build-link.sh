@@ -47,7 +47,7 @@ mkdir -p "$GAMSDIST"
 mv gmscuopt-cu13.out "$GAMSDIST/gmscuopt.out"
 
 cp "$CUOPT/lib64/libcuopt.so" "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libgomp-*.so* "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libraft_cu13.libs/libgomp-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libtbb-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libtbbmalloc-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/rapids_logger/lib64/librapids_logger.so "$GAMSDIST/"

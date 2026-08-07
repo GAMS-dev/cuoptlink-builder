@@ -9,7 +9,7 @@
 #include "gmomcc.h"
 #include "gevmcc.h"
 #include "optcc.h"
-#include <cuopt/linear_programming/cuopt_c.h>
+#include <cuopt/mathematical_optimization/cuopt_c.h>
 
 int 
 printOut (gevHandle_t gev, char *fmt, ...)

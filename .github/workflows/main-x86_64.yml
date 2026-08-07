@@ -75,7 +75,7 @@ jobs:
           cp gmscuopt-cu12.out release-cu12/gmscuopt.out
           cp assets/* release-cu12/
           cp venvs/cu12/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so release-cu12/
-          cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libgomp-*.so* release-cu12/
+          cp venvs/cu12/lib/python3.12/site-packages/libraft_cu12.libs/libgomp-*.so* release-cu12/
           cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libtbb-*.so* release-cu12/
           cp venvs/cu12/lib/python3.12/site-packages/libcuopt_cu12.libs/libtbbmalloc-*.so* release-cu12/
           cp venvs/cu12/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so release-cu12/
@@ -94,7 +94,7 @@ jobs:
           cp gmscuopt-cu13.out release-cu13/gmscuopt.out
           cp assets/* release-cu13/
           cp venvs/cu13/lib/python3.12/site-packages/libcuopt/lib64/libcuopt.so release-cu13/
-          cp venvs/cu13/lib/python3.12/site-packages/libcuopt_cu13.libs/libgomp-*.so* release-cu13/
+          cp venvs/cu13/lib/python3.12/site-packages/libraft_cu13.libs/libgomp-*.so* release-cu13/
           cp venvs/cu13/lib/python3.12/site-packages/libcuopt_cu13.libs/libtbb-*.so* release-cu13/
           cp venvs/cu13/lib/python3.12/site-packages/libcuopt_cu13.libs/libtbbmalloc-*.so* release-cu13/
           cp venvs/cu13/lib/python3.12/site-packages/rapids_logger/lib64/librapids_logger.so release-cu13/
