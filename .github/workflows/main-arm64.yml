@@ -28,9 +28,9 @@ jobs:
         run: |
           mkdir -p venvs
           uv venv venvs/cu12
-          uv pip install --python venvs/cu12 --timeout=150 --extra-index-url=https://pypi.nvidia.com 'cuopt-cu12==26.8.*' -qq
+          uv pip install --python venvs/cu12 --extra-index-url=https://pypi.nvidia.com 'cuopt-cu12==26.8.*' -qq
           uv venv venvs/cu13
-          uv pip install --python venvs/cu13 --timeout=150 --extra-index-url=https://pypi.nvidia.com 'cuopt-cu13==26.8.*' -qq
+          uv pip install --python venvs/cu13 --extra-index-url=https://pypi.nvidia.com 'cuopt-cu13==26.8.*' -qq
 
       # Get GAMS (ARM64 version)
       - name: Download and extract latest GAMS distribution
