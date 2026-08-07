@@ -50,6 +50,7 @@ cp "$CUOPT/lib64/libcuopt.so" "$GAMSDIST/"
 cp "$SITE_PACKAGES"/libraft_cu13.libs/libgomp-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libtbb-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libtbbmalloc-*.so* "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libomp-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/rapids_logger/lib64/librapids_logger.so "$GAMSDIST/"
 cp "$SITE_PACKAGES"/librmm/lib64/librmm.so "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcudss.so* "$GAMSDIST/"
@@ -61,6 +62,7 @@ cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcurand.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcusolver.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcusparse.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libcares-*.so* "$GAMSDIST/"
+cp "$SITE_PACKAGES"/nvidia/nccl/lib/libnccl.so* "$GAMSDIST/"
 
 # Copy assets (suppress errors if directory is empty or missing)
 cp -r assets/* "$GAMSDIST/" 2>/dev/null || true

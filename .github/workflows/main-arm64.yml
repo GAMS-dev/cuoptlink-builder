@@ -73,8 +73,10 @@ jobs:
           cp venvs/cu12/lib/python3.13/site-packages/libraft_cu12.libs/libgomp-*.so* release-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/libcuopt_cu12.libs/libtbb-*.so* release-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/libcuopt_cu12.libs/libtbbmalloc-*.so* release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_cu12.libs/libomp-*.so* release-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/rapids_logger/lib64/librapids_logger.so release-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/librmm/lib64/librmm.so release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/nvidia/nccl/lib/libnccl.so* release-cu12/
           mkdir runtime-cu12
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/cu12/lib/libcudss.so* runtime-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/cu12/lib/libcudss_mtlayer_gomp.so* runtime-cu12/
@@ -92,8 +94,10 @@ jobs:
           cp venvs/cu13/lib/python3.13/site-packages/libraft_cu13.libs/libgomp-*.so* release-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libtbb-*.so* release-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libtbbmalloc-*.so* release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libomp-*.so* release-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/rapids_logger/lib64/librapids_logger.so release-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/librmm/lib64/librmm.so release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/nvidia/nccl/lib/libnccl.so* release-cu13/
           mkdir runtime-cu13
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcudss.so* runtime-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcudss_mtlayer_gomp.so* runtime-cu13/
