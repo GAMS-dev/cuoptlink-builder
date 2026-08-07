@@ -3,12 +3,13 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <ctype.h>
 #include "gmomcc.h"
 #include "gevmcc.h"
 #include "optcc.h"
-#include <cuopt/linear_programming/cuopt_c.h>
+#include <cuopt/mathematical_optimization/cuopt_c.h>
 
 int 
 printOut (gevHandle_t gev, char *fmt, ...)
@@ -252,6 +253,11 @@ int main(int argc, char *argv[])
     optGetValuesNr(opt, i, optname, &ival, &dval, sval);
 
     if (data_type == optDataInteger) {
+      if (strcasecmp(optname, "solve_by_pdlp") == 0 || strcasecmp(optname, "solve-by-pdlp") == 0)
+      {
+        printOut(gev, "WARNING: Parameter 'solve-by-pdlp' was removed in cuOpt 26.08. Ignoring option.\n");
+        continue;
+      }
       status = cuOptSetIntegerParameter(settings, optname, ival);
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error setting integer option >%s<: %d\n", optname, status);
@@ -842,7 +848,9 @@ int main(int argc, char *argv[])
           printOut(gev, "Error getting reduced cost: %d\n", status);
           goto DONE;
         }
-        if (gmoSense(gmo) == gmoObj_Max)
+        // Only invert sign for linear maximization models;
+        // cuOpt 26.08+ handles quadratic maximization dual signs natively.
+        if (gmoSense(gmo) == gmoObj_Max && gmoModelType(gmo) == gmoProc_lp)
         {
           // patch duals for max problem
           for (int j = 0; j < num_variables; j++)
@@ -874,7 +882,9 @@ int main(int argc, char *argv[])
             final_duals[i] = raw_duals[i]; // Fallback if directly read from MPS
           }
 
-          if (gmoSense(gmo) == gmoObj_Max)
+          // Only invert sign for linear maximization models;
+          // cuOpt 26.08+ handles quadratic maximization dual signs natively.
+          if (gmoSense(gmo) == gmoObj_Max && gmoModelType(gmo) == gmoProc_lp)
           {
             final_duals[i] *= -1.0; // patch duals for max problem
           }
