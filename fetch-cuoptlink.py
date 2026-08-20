@@ -4,6 +4,7 @@ import ctypes
 import os
 import platform
 import shutil
+import subprocess
 import tempfile
 import zipfile
 from typing import Optional, Tuple
@@ -226,6 +227,32 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
     typer.echo(f"Backed up original `{config_path}` to `{backup_path}`.")
 
 
+def _test_installation(gams_dir: str) -> None:
+    typer.echo("Testing installation with GAMS trnsport model...")
+    gamslib_bin = os.path.join(gams_dir, "gamslib")
+    gams_bin = os.path.join(gams_dir, "gams")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            # Fetch model 1 (trnsport) using gamslib
+            subprocess.run(
+                [gamslib_bin, "-q", "1"],
+                cwd=temp_dir,
+                check=True,
+            )
+
+            # Execute gams with cuopt solver
+            subprocess.run(
+                [gams_bin, "trnsport", "solver=cuopt", "lo=0"],
+                cwd=temp_dir,
+                check=True,
+            )
+            typer.echo("Installation test completed successfully!")
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            typer.echo(f"Installation test failed: {e}")
+            raise typer.Exit(code=1) from e
+
+
 def _run_interactive_install() -> None:
     gams_dir = _prompt_gams_dir()
     cuda_version, cuda_runtime = _prompt_cuda_version()
@@ -280,6 +307,8 @@ def _execute_install(
 
     _set_installed_files(gams_dir, sorted(files))
     typer.echo(f"Successfully installed `{SOLVER_NAME}` into `{gams_dir}`.")
+
+    _test_installation(gams_dir)
 
 
 def _execute_uninstall(gams_dir: str) -> None:
