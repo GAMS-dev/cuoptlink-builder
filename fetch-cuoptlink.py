@@ -76,6 +76,21 @@ def _get_default_gams_dir() -> Optional[str]:
     return None
 
 
+def _prompt_gams_dir() -> str:
+    default_gams_dir = _get_default_gams_dir()
+    while True:
+        prompt_kwargs = {}
+        if default_gams_dir:
+            prompt_kwargs["default"] = default_gams_dir
+
+        gams_dir_input = typer.prompt("GAMS system directory path", **prompt_kwargs)
+        gams_dir = os.path.abspath(os.path.expanduser(gams_dir_input))
+
+        if os.path.isdir(gams_dir) and os.access(gams_dir, os.W_OK):
+            return gams_dir
+        typer.echo(f"Error: Directory '{gams_dir}' does not exist or is not writable. Try again.\n")
+
+
 def _get_asset_urls(names: list[str], release_tag: Optional[str] = None) -> list[str]:
     import requests
 
@@ -183,19 +198,7 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
 
 
 def _run_interactive_install() -> None:
-    default_gams_dir = _get_default_gams_dir()
-    
-    while True:
-        prompt_kwargs = {}
-        if default_gams_dir:
-            prompt_kwargs["default"] = default_gams_dir
-
-        gams_dir_input = typer.prompt("GAMS system directory path", **prompt_kwargs)
-        gams_dir = os.path.abspath(os.path.expanduser(gams_dir_input))
-
-        if os.path.isdir(gams_dir) and os.access(gams_dir, os.W_OK):
-            break
-        typer.echo(f"Error: Directory '{gams_dir}' does not exist or is not writable. Try again.\n")
+    gams_dir = _prompt_gams_dir()
 
     cuda_version = typer.prompt(
         "CUDA version",
@@ -259,62 +262,7 @@ def _execute_install(
     typer.echo(f"Successfully installed `{SOLVER_NAME}` into `{gams_dir}`.")
 
 
-@app.callback(invoke_without_command=True)
-def main(ctx: typer.Context) -> None:
-    if ctx.invoked_subcommand is None:
-        _run_interactive_install()
-
-
-@app.command()
-def install(
-    gams_dir: str = typer.Option(
-        ...,
-        "--gams-dir",
-        "-g",
-        help="Path to the GAMS system directory.",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        writable=True,
-        resolve_path=True,
-    ),
-    cuda_version: Optional[str] = typer.Option(
-        None,
-        "--cuda-version",
-        "-c",
-        help="CUDA version (12 or 13). Auto-detected if omitted.",
-    ),
-    cuda_runtime: bool = typer.Option(
-        False,
-        "--cuda-runtime",
-        help="Download and unpack bundled CUDA runtime libraries.",
-    ),
-    release: Optional[str] = typer.Option(
-        "latest",
-        "--release",
-        "-r",
-        help="Tag name of cuoptlink-builder release (e.g. v1.0.0 or 'latest').",
-    ),
-) -> None:
-    """Install the cuOpt link into a target GAMS system directory."""
-    _execute_install(gams_dir, cuda_version, cuda_runtime, release)
-
-
-@app.command()
-def uninstall(
-    gams_dir: str = typer.Option(
-        ...,
-        "--gams-dir",
-        "-g",
-        help="Path to the GAMS system directory.",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        writable=True,
-        resolve_path=True,
-    ),
-) -> None:
-    """Uninstall the cuOpt link from a target GAMS system directory."""
+def _execute_uninstall(gams_dir: str) -> None:
     _get_architecture()
     installed_files = get_installed_files(gams_dir)
     if not installed_files:
@@ -337,6 +285,59 @@ def uninstall(
         pass
 
     typer.echo(f"Successfully uninstalled `{SOLVER_NAME}` from `{gams_dir}`.")
+
+
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        _run_interactive_install()
+
+
+@app.command()
+def install(
+    gams_dir: Optional[str] = typer.Option(
+        None,
+        "--gams-dir",
+        "-g",
+        help="Path to the GAMS system directory.",
+    ),
+    cuda_version: Optional[str] = typer.Option(
+        None,
+        "--cuda-version",
+        "-c",
+        help="CUDA version (12 or 13). Auto-detected if omitted.",
+    ),
+    cuda_runtime: bool = typer.Option(
+        False,
+        "--cuda-runtime",
+        help="Download and unpack bundled CUDA runtime libraries.",
+    ),
+    release: Optional[str] = typer.Option(
+        "latest",
+        "--release",
+        "-r",
+        help="Tag name of cuoptlink-builder release (e.g. v1.0.0 or 'latest').",
+    ),
+) -> None:
+    """Install the cuOpt link into a target GAMS system directory."""
+    if gams_dir is None:
+        gams_dir = _prompt_gams_dir()
+    _execute_install(gams_dir, cuda_version, cuda_runtime, release)
+
+
+@app.command()
+def uninstall(
+    gams_dir: Optional[str] = typer.Option(
+        None,
+        "--gams-dir",
+        "-g",
+        help="Path to the GAMS system directory.",
+    ),
+) -> None:
+    """Uninstall the cuOpt link from a target GAMS system directory."""
+    if gams_dir is None:
+        gams_dir = _prompt_gams_dir()
+    _execute_uninstall(gams_dir)
 
 
 if __name__ == "__main__":
