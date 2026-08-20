@@ -21,6 +21,12 @@ Supported model types are LP, MIP, RMIP, QCP, MIQCP, RMIQCP.
 
 You can automatically download, install, test, and manage the cuOpt solver link using the provided `fetch-cuoptlink.py` script.
 
+Quickstart (requires [uv](https://docs.astral.sh/uv/)): Run the following command to download and execute the script:
+
+```bash
+uv run https://raw.githubusercontent.com/GAMS-dev/cuoptlink-builder/main/fetch-cuoptlink.py
+```
+
 ### Interactive Mode
 
 Running the script with no arguments launches an interactive prompt. It auto-detects your GAMS path (via `which gams`) and system CUDA version, prompting you for any missing options:
