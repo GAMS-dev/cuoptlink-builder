@@ -91,6 +91,22 @@ def _prompt_gams_dir() -> str:
         typer.echo(f"Error: Directory '{gams_dir}' does not exist or is not writable. Try again.\n")
 
 
+def _prompt_cuda_version() -> str:
+    detected_cuda = _detect_cuda_version()
+    if detected_cuda:
+        typer.echo(f"Detected CUDA runtime on system: CUDA {detected_cuda}")
+        default_cuda = detected_cuda
+    else:
+        typer.echo("No CUDA runtime automatically detected on system.")
+        default_cuda = DEFAULT_CUDA_VERSION
+
+    versions_str = ", ".join(CUDA_VERSIONS)
+    return typer.prompt(
+        f"CUDA version (supported: {versions_str})",
+        default=default_cuda,
+    )
+
+
 def _get_asset_urls(names: list[str], release_tag: Optional[str] = None) -> list[str]:
     import requests
 
@@ -199,11 +215,7 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
 
 def _run_interactive_install() -> None:
     gams_dir = _prompt_gams_dir()
-
-    cuda_version = typer.prompt(
-        "CUDA version",
-        default=DEFAULT_CUDA_VERSION,
-    )
+    cuda_version = _prompt_cuda_version()
 
     cuda_runtime = typer.confirm(
         "Download and install bundled CUDA runtime libraries?",
