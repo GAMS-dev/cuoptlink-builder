@@ -6,7 +6,7 @@ import platform
 import shutil
 import tempfile
 import zipfile
-from typing import Optional
+from typing import Optional, Tuple
 
 import typer
 
@@ -91,20 +91,33 @@ def _prompt_gams_dir() -> str:
         typer.echo(f"Error: Directory '{gams_dir}' does not exist or is not writable. Try again.\n")
 
 
-def _prompt_cuda_version() -> str:
+def _prompt_cuda_version() -> Tuple[str, bool]:
     detected_cuda = _detect_cuda_version()
     if detected_cuda:
         typer.echo(f"Detected CUDA runtime on system: CUDA {detected_cuda}")
         default_cuda = detected_cuda
+        has_detected_cuda = True
     else:
         typer.echo("No CUDA runtime automatically detected on system.")
         default_cuda = DEFAULT_CUDA_VERSION
+        has_detected_cuda = False
 
     versions_str = ", ".join(CUDA_VERSIONS)
-    return typer.prompt(
+    cuda_version = typer.prompt(
         f"CUDA version (supported: {versions_str})",
         default=default_cuda,
     )
+
+    # If CUDA was detected on the host system, default runtime download to False.
+    # Otherwise, default runtime download to True.
+    default_runtime_download = not has_detected_cuda
+
+    cuda_runtime = typer.confirm(
+        "Download and install bundled CUDA runtime libraries?",
+        default=default_runtime_download,
+    )
+
+    return cuda_version, cuda_runtime
 
 
 def _get_asset_urls(names: list[str], release_tag: Optional[str] = None) -> list[str]:
@@ -215,12 +228,7 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
 
 def _run_interactive_install() -> None:
     gams_dir = _prompt_gams_dir()
-    cuda_version = _prompt_cuda_version()
-
-    cuda_runtime = typer.confirm(
-        "Download and install bundled CUDA runtime libraries?",
-        default=False,
-    )
+    cuda_version, cuda_runtime = _prompt_cuda_version()
 
     release = typer.prompt(
         "cuoptlink-builder release version",
