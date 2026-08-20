@@ -17,7 +17,42 @@ Supported model types are LP, MIP, RMIP, QCP, MIQCP, RMIQCP.
 - **NVIDIA GPU:** Volta architecture or better
 - **CUDA Runtime Libraries:** 12 or 13
 
-## Getting started / installation
+## Installation using `fetch-cuoptlink.py`
+
+You can automatically download, install, test, and manage the cuOpt solver link using the provided `fetch-cuoptlink.py` script.
+
+### Interactive Mode
+
+Running the script with no arguments launches an interactive prompt. It auto-detects your GAMS path (via `which gams`) and system CUDA version, prompting you for any missing options:
+
+```bash
+python fetch-cuoptlink.py
+```
+
+Calling `uninstall` without additional options will interactively prompt for the GAMS directory path:
+
+```bash
+python fetch-cuoptlink.py uninstall
+```
+
+### Non-interactive CLI Mode
+
+You can also pass command-line arguments to automate installation and uninstallation:
+
+```bash
+# Basic installation using detected GAMS directory and CUDA runtime download
+python fetch-cuoptlink.py install --gams-dir /opt/gams/gams55.0_linux_x64_64_sfx --cuda-runtime
+
+# Specify a CUDA version and release tag explicitly
+python fetch-cuoptlink.py install -g /opt/gams/gams55.0 -c 12 -r v0.0.8
+
+# Uninstall the solver link from a GAMS system directory
+python fetch-cuoptlink.py uninstall -g /opt/gams/gams55.0
+```
+
+> **Note:** Successful installations automatically verify the solver link by running the GAMS `trnsport` test model with `solver=cuopt`.
+
+## Manual installation
 
 - Make sure [CUDA runtime](https://developer.nvidia.com/cuda-downloads?target_os=Linux) is installed
 - Download and unpack `cuopt-link-release-cu12-{x86_64,arm64}.zip` or `cuopt-link-release-cu13-{x86_64,arm64}.zip` (for CUDA 12 and 13 respectively) from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases):
