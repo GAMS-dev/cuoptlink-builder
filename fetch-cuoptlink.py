@@ -1,7 +1,8 @@
 # /// script
 # dependencies = [
 #   "typer",
-#   "requests"
+#   "requests",
+#   "pyyaml"
 # ]
 # ///
 
@@ -12,11 +13,13 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import tempfile
 import zipfile
 from typing import Optional, Tuple
 
 import typer
+import yaml
 
 app = typer.Typer(
     help="Manage cuOpt solver link for standalone GAMS system on Linux.",
@@ -29,6 +32,8 @@ BASE_RELEASE_URL = f"https://api.github.com/repos/{REPOSITORY}/releases"
 CUDA_VERSIONS = ("12", "13")
 DEFAULT_CUDA_VERSION = "13"
 CONFIG_FILE = "gamsconfig.yaml"
+CUOPT_CONFIG_FILE = "gamsconfig_cuopt.yaml"
+MERGE_SCRIPT_NAME = "merge_gamsconfig.py"
 BACKUP_FILE = "gamsconfig.yaml.cuopt_backup"
 MANIFEST_FILE = ".cuopt_installed_files.txt"
 
@@ -234,6 +239,71 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
     typer.echo(f"Backed up original `{config_path}` to `{backup_path}`.")
 
 
+def _merge_cuopt_config(gams_dir: str) -> None:
+    cuopt_cfg = os.path.join(gams_dir, CUOPT_CONFIG_FILE)
+    if not os.path.isfile(cuopt_cfg):
+        return
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    merge_script = os.path.join(script_dir, MERGE_SCRIPT_NAME)
+
+    if not os.path.isfile(merge_script):
+        typer.echo(f"Error: `{MERGE_SCRIPT_NAME}` not found at `{merge_script}`.")
+        raise typer.Exit(code=1)
+
+    gams_config_path = os.path.join(gams_dir, CONFIG_FILE)
+
+    try:
+        result = subprocess.run(
+            [sys.executable, merge_script, cuopt_cfg],
+            cwd=gams_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        with open(gams_config_path, "w", encoding="utf-8") as f:
+            f.write(result.stdout)
+
+        typer.echo(f"Merged `{CUOPT_CONFIG_FILE}` into `{CONFIG_FILE}`.")
+    except subprocess.CalledProcessError as e:
+        typer.echo(f"Failed to merge config via `{MERGE_SCRIPT_NAME}`:\n{e.stderr}")
+        raise typer.Exit(code=1) from e
+    finally:
+        if os.path.exists(cuopt_cfg):
+            os.unlink(cuopt_cfg)
+
+
+def _remove_cuopt_from_config(gams_dir: str) -> None:
+    config_path = os.path.join(gams_dir, CONFIG_FILE)
+    if not os.path.isfile(config_path):
+        return
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+
+        if not isinstance(config, dict) or "solverConfig" not in config:
+            return
+
+        solver_config = config["solverConfig"]
+        if isinstance(solver_config, list):
+            new_solver_config = []
+            for item in solver_config:
+                if isinstance(item, dict) and SOLVER_NAME in item:
+                    continue
+                new_solver_config.append(item)
+            config["solverConfig"] = new_solver_config
+        elif isinstance(solver_config, dict):
+            solver_config.pop(SOLVER_NAME, None)
+
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        typer.echo(f"Removed `{SOLVER_NAME}` entry from `{CONFIG_FILE}`.")
+    except Exception as e:
+        typer.echo(f"Warning: Failed to remove `{SOLVER_NAME}` from `{CONFIG_FILE}`: {e}")
+
+
 def _test_installation(gams_dir: str) -> None:
     typer.echo("Testing installation with GAMS trnsport model...")
     gamslib_bin = os.path.join(gams_dir, "gamslib")
@@ -310,7 +380,13 @@ def _execute_install(
         for name, url in zip(archives, urls):
             archive_path = os.path.join(directory, name)
             _download(url, archive_path)
-            files.update(_extract(archive_path, gams_dir))
+            extracted_files = _extract(archive_path, gams_dir)
+            files.update(extracted_files)
+
+    _merge_cuopt_config(gams_dir)
+
+    files.discard(CUOPT_CONFIG_FILE)
+    files.discard(CONFIG_FILE)
 
     _set_installed_files(gams_dir, sorted(files))
     typer.echo(f"Successfully installed `{SOLVER_NAME}` into `{gams_dir}`.")
@@ -326,14 +402,14 @@ def _execute_uninstall(gams_dir: str) -> None:
         raise typer.Exit(code=1)
 
     for name in installed_files:
+        if name == CONFIG_FILE:
+            continue
         try:
             os.unlink(os.path.join(gams_dir, name))
         except FileNotFoundError:
             pass
 
-    backup_path = os.path.join(gams_dir, BACKUP_FILE)
-    if os.path.isfile(backup_path):
-        shutil.move(backup_path, os.path.join(gams_dir, CONFIG_FILE))
+    _remove_cuopt_from_config(gams_dir)
 
     try:
         os.unlink(_get_manifest_path(gams_dir))
