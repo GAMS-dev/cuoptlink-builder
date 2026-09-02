@@ -11,9 +11,9 @@ from __future__ import annotations
 import ctypes
 import os
 import platform
+import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import zipfile
 from typing import Optional, Tuple
@@ -33,9 +33,11 @@ CUDA_VERSIONS = ("12", "13")
 DEFAULT_CUDA_VERSION = "13"
 CONFIG_FILE = "gamsconfig.yaml"
 CUOPT_CONFIG_FILE = "gamsconfig_cuopt.yaml"
-MERGE_SCRIPT_NAME = "merge_gamsconfig.py"
 BACKUP_FILE = "gamsconfig.yaml.cuopt_backup"
 MANIFEST_FILE = ".cuopt_installed_files.txt"
+SOLVER_CONFIG_SECTION = "solverConfig"
+MARKER_BEGIN = f"# begin {SOLVER_NAME} solver configuration of cuoptlink"
+MARKER_END = f"# end {SOLVER_NAME} solver configuration of cuoptlink"
 
 
 def _get_manifest_path(gams_dir: str) -> str:
@@ -239,34 +241,174 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
     typer.echo(f"Backed up original `{config_path}` to `{backup_path}`.")
 
 
+def _load_config(path: str) -> dict:
+    with open(path, encoding="utf-8") as file:
+        try:
+            config = yaml.safe_load(file)
+        except yaml.YAMLError as e:
+            typer.echo(f"`{path}` is not a valid YAML file. Here is the error: {e}")
+            raise typer.Exit(code=1) from e
+
+    if config is None:
+        return {}
+
+    if not isinstance(config, dict):
+        typer.echo(
+            f"`{path}` must map configuration sections such as "
+            f"`{SOLVER_CONFIG_SECTION}` to their entries."
+        )
+        raise typer.Exit(code=1)
+
+    return config
+
+
+def _find_section(lines: list[str], section: str, path: str) -> int | None:
+    for index, line in enumerate(lines):
+        if not re.match(rf"{re.escape(section)}[ \t]*:", line):
+            continue
+
+        if not re.match(rf"{re.escape(section)}[ \t]*:[ \t]*(#.*)?$", line):
+            typer.echo(
+                f"`{section}` of `{path}` is not written as a block of entries, "
+                f"hence we cannot add `{SOLVER_NAME}` to it. Please add the "
+                f"entry by hand."
+            )
+            raise typer.Exit(code=1)
+
+        return index
+
+    return None
+
+
+def _get_section_end(lines: list[str], start: int) -> int:
+    end = start
+    for index in range(start, len(lines)):
+        line = lines[index]
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        is_entry = stripped == "-" or stripped.startswith("- ")
+        if not line[0].isspace() and not is_entry:
+            break
+
+        end = index + 1
+
+    return end
+
+
+def _get_document_end(lines: list[str]) -> int:
+    for index, line in enumerate(lines):
+        if re.match(r"\.\.\.([ \t]|$)", line):
+            return index
+
+    return len(lines)
+
+
+def _get_entry_indent(entries: list[str]) -> str | None:
+    for entry in entries:
+        match = re.match(r"([ \t]*)-([ \t]|$)", entry)
+        if match is not None:
+            return match.group(1)
+
+    return None
+
+
+def _reindent(entries: list[str], indent: str) -> list[str]:
+    base = _get_entry_indent(entries) or ""
+    return [
+        indent + entry[len(base) :] if entry.startswith(base) else entry
+        for entry in entries
+    ]
+
+
+def _get_solver_config(gams_dir: str) -> list[str]:
+    path = os.path.join(gams_dir, CUOPT_CONFIG_FILE)
+    if list(_load_config(path)) != [SOLVER_CONFIG_SECTION]:
+        typer.echo(
+            f"`{path}` of the release archive holds more than a "
+            f"`{SOLVER_CONFIG_SECTION}` section, which cannot be merged into "
+            f"`{CONFIG_FILE}`. Please add its content to `{CONFIG_FILE}` by hand."
+        )
+        raise typer.Exit(code=1)
+
+    with open(path, encoding="utf-8") as file:
+        lines = file.read().splitlines()
+
+    index = _find_section(lines, SOLVER_CONFIG_SECTION, path)
+    if index is None:
+        typer.echo(f"`{path}` of the release archive does not register a solver.")
+        raise typer.Exit(code=1)
+
+    return lines[index + 1 : _get_section_end(lines, index + 1)]
+
+
+def _merge_solver_config(text: str, entries: list[str], path: str) -> str:
+    lines = text.splitlines()
+    index = _find_section(lines, SOLVER_CONFIG_SECTION, path)
+    if index is None:
+        block = [f"{SOLVER_CONFIG_SECTION}:", *entries]
+        end = _get_document_end(lines)
+    else:
+        end = _get_section_end(lines, index + 1)
+        indent = _get_entry_indent(lines[index + 1 : end])
+        block = entries if indent is None else _reindent(entries, indent)
+
+    merged = [*lines[:end], MARKER_BEGIN, *block, MARKER_END, *lines[end:]]
+    return "\n".join(merged) + "\n"
+
+
+def _strip_solver_config(text: str) -> str:
+    remaining = []
+    is_contributed = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == MARKER_BEGIN:
+            is_contributed = True
+        elif stripped == MARKER_END:
+            is_contributed = False
+        elif not is_contributed:
+            remaining.append(line)
+
+    return "\n".join(remaining) + "\n" if remaining else ""
+
+
 def _merge_cuopt_config(gams_dir: str) -> None:
     cuopt_cfg = os.path.join(gams_dir, CUOPT_CONFIG_FILE)
     if not os.path.isfile(cuopt_cfg):
         return
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    merge_script = os.path.join(script_dir, MERGE_SCRIPT_NAME)
-
-    if not os.path.isfile(merge_script):
-        typer.echo(f"Error: `{MERGE_SCRIPT_NAME}` not found at `{merge_script}`.")
-        raise typer.Exit(code=1)
-
-    gams_config_path = os.path.join(gams_dir, CONFIG_FILE)
-
     try:
-        result = subprocess.run(
-            [sys.executable, merge_script, cuopt_cfg],
-            cwd=gams_dir,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        with open(gams_config_path, "w", encoding="utf-8") as f:
-            f.write(result.stdout)
+        config_path = os.path.join(gams_dir, CONFIG_FILE)
+
+        if os.path.isfile(config_path):
+            config = _load_config(config_path)
+            solver_config = config.get(SOLVER_CONFIG_SECTION)
+            has_cuopt = False
+            if isinstance(solver_config, list):
+                has_cuopt = any(isinstance(item, dict) and SOLVER_NAME in item for item in solver_config)
+            elif isinstance(solver_config, dict):
+                has_cuopt = SOLVER_NAME in solver_config
+                
+            if has_cuopt:
+                typer.echo(f"`{SOLVER_NAME}` entry already exists in `{CONFIG_FILE}`. Skipping merge.")
+                return
+
+        entries = _get_solver_config(gams_dir)
+
+        text = ""
+        try:
+            with open(config_path, encoding="utf-8") as file:
+                text = _strip_solver_config(file.read())
+        except FileNotFoundError:
+            pass
+
+        with open(config_path, "w", encoding="utf-8") as file:
+            file.write(_merge_solver_config(text, entries, config_path))
 
         typer.echo(f"Merged `{CUOPT_CONFIG_FILE}` into `{CONFIG_FILE}`.")
-    except subprocess.CalledProcessError as e:
-        typer.echo(f"Failed to merge config via `{MERGE_SCRIPT_NAME}`:\n{e.stderr}")
+    except Exception as e:
+        typer.echo(f"Failed to merge config:\n{e}")
         raise typer.Exit(code=1) from e
     finally:
         if os.path.exists(cuopt_cfg):
@@ -275,29 +417,18 @@ def _merge_cuopt_config(gams_dir: str) -> None:
 
 def _remove_cuopt_from_config(gams_dir: str) -> None:
     config_path = os.path.join(gams_dir, CONFIG_FILE)
-    if not os.path.isfile(config_path):
+    try:
+        with open(config_path, encoding="utf-8") as file:
+            remaining = _strip_solver_config(file.read())
+    except FileNotFoundError:
         return
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-
-        if not isinstance(config, dict) or "solverConfig" not in config:
-            return
-
-        solver_config = config["solverConfig"]
-        if isinstance(solver_config, list):
-            new_solver_config = []
-            for item in solver_config:
-                if isinstance(item, dict) and SOLVER_NAME in item:
-                    continue
-                new_solver_config.append(item)
-            config["solverConfig"] = new_solver_config
-        elif isinstance(solver_config, dict):
-            solver_config.pop(SOLVER_NAME, None)
-
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        if not remaining.strip():
+            os.unlink(config_path)
+        else:
+            with open(config_path, "w", encoding="utf-8") as file:
+                file.write(remaining)
 
         typer.echo(f"Removed `{SOLVER_NAME}` entry from `{CONFIG_FILE}`.")
     except Exception as e:
