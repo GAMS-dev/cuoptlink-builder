@@ -121,10 +121,15 @@ jobs:
             for model in examples/models/capability_tests/*.gms; do
               name=$(basename "$model" .gms)
               lst="${cuda_dir}_${name}.lst"
-              gamsdist/gams "$model" mip=cuopt lo=0 o="$lst"
-              if ! grep -qF "$EXPECTED" "$lst"; then
-                echo "FAIL ($cuda_dir): $model was not rejected as expected"
-                cat "$lst"
+              log="${cuda_dir}_${name}.log"
+              set +e
+              gamsdist/gams "$model" mip=cuopt lo=3 o="$lst" > "$log" 2>&1
+              rc=$?
+              set -e
+              if ! grep -qF "$EXPECTED" "$lst" 2>/dev/null; then
+                echo "FAIL ($cuda_dir): $model was not rejected as expected (gams exit code $rc)"
+                echo "--- $log ---"; cat "$log" 2>/dev/null || echo "(missing)"
+                echo "--- $lst ---"; cat "$lst" 2>/dev/null || echo "(missing)"
                 exit 1
               fi
               echo "OK ($cuda_dir): $model correctly rejected"
