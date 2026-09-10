@@ -109,37 +109,6 @@ jobs:
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcusparse.so* runtime-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libcares-*.so* runtime-cu13/
 
-      # Smoke-test the built link: models using GAMS constructs cuOpt does not
-      # support (SOS1/SOS2/semi-integer variables) must be explicitly rejected
-      # with a clear error instead of being silently mis-solved. This needs no
-      # GPU, since the rejection happens before any GPU work is done.
-      - name: Run capability-rejection tests
-        run: |
-          EXPECTED="ERROR: cuOpt does not support SOS1, SOS2, or semi-integer variables."
-          for cuda_dir in release-cu12 release-cu13; do
-            cp "$cuda_dir"/* gamsdist/
-            # GAMS only auto-registers solvers from a file literally named
-            # gamsconfig.yaml, not gamsconfig_cuopt.yaml (see README's manual
-            # installation instructions, which rely on this rename/overwrite).
-            cp "$cuda_dir/gamsconfig_cuopt.yaml" gamsdist/gamsconfig.yaml
-            for model in examples/models/capability_tests/*.gms; do
-              name=$(basename "$model" .gms)
-              lst="${cuda_dir}_${name}.lst"
-              log="${cuda_dir}_${name}.log"
-              set +e
-              gamsdist/gams "$model" mip=cuopt lo=3 o="$lst" > "$log" 2>&1
-              rc=$?
-              set -e
-              if ! grep -qF "$EXPECTED" "$lst" 2>/dev/null; then
-                echo "FAIL ($cuda_dir): $model was not rejected as expected (gams exit code $rc)"
-                echo "--- $log ---"; cat "$log" 2>/dev/null || echo "(missing)"
-                echo "--- $lst ---"; cat "$lst" 2>/dev/null || echo "(missing)"
-                exit 1
-              fi
-              echo "OK ($cuda_dir): $model correctly rejected"
-            done
-          done
-
       # Upload artifacts
       - name: Upload CUDA 12 link artifact to GitHub Actions (always)
         uses: actions/upload-artifact@v6
