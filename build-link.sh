@@ -6,14 +6,21 @@ set -e
 # Users can export these before running the script, otherwise defaults are used.
 GAMSDIST="${GAMSDIST:-$HOME/gamsdist}"
 WORKSPACE="${WORKSPACE:-$(pwd)}"
-CUOPT_VERSION="${CUOPT_VERSION:-26.06}"
+CUOPT_VERSION="${CUOPT_VERSION:-26.08}"
 CUOPT_HASH="${CUOPT_HASH:-12345}"
 
 # 2. Dynamically find the site-packages directory to avoid hardcoding the Python version
-SITE_PACKAGES=$(find "$WORKSPACE/venv/lib" -maxdepth 2 -type d -name "site-packages" | head -n 1)
+# or the venv directory name (some setups use "venv", others "uv"-style ".venv").
+SITE_PACKAGES=""
+for VENV_DIR in ".venv" "venv"; do
+    if [ -d "$WORKSPACE/$VENV_DIR/lib" ]; then
+        SITE_PACKAGES=$(find "$WORKSPACE/$VENV_DIR/lib" -maxdepth 2 -type d -name "site-packages" | head -n 1)
+        [ -n "$SITE_PACKAGES" ] && break
+    fi
+done
 
 if [ -z "$SITE_PACKAGES" ]; then
-    echo "Error: Could not find site-packages in $WORKSPACE/venv/lib."
+    echo "Error: Could not find site-packages in $WORKSPACE/.venv/lib or $WORKSPACE/venv/lib."
     echo "Please ensure you have created the virtual environment and installed dependencies."
     exit 1
 fi

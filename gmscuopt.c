@@ -204,6 +204,11 @@ int main(int argc, char *argv[])
     printOut(gev, "WARNING: Setting a MIP start is only allowed for model type MIP/MIQCP!\n");
     mipstart = 0;
   }
+  if (mipstart && optGetDefinedStr(opt, "prob_read"))
+  {
+    printOut(gev, "WARNING: Setting a MIP start is not supported together with 'prob_read'!\n");
+    mipstart = 0;
+  }
 
   // Set solver parameters with GAMS options
   if (gevGetIntOpt(gev, gevThreadsRaw) != 0)
@@ -273,10 +278,10 @@ int main(int argc, char *argv[])
   }
 
   // Try taking primal or dual (marginal) values from user (for LPs)
-  if (gmoModelType(gmo) == gmoProc_lp)
+  if (gmoModelType(gmo) == gmoProc_lp && !optGetDefinedStr(opt, "prob_read"))
   {
     cuopt_int_t chosen_method;
-    status = cuOptGetIntegerParameter(settings, "method", &chosen_method);
+    status = cuOptGetIntegerParameter(settings, CUOPT_METHOD, &chosen_method);
     if (status != CUOPT_SUCCESS)
     {
       printOut(gev, "Error querying method option.\n");
@@ -290,7 +295,7 @@ int main(int argc, char *argv[])
       double *marginals = (double *)malloc(sizeof(double) * nconstraints);
       gmoGetVarL(gmo, lvls);
       gmoGetEquM(gmo, marginals);
-#if defined(CUOPT_INSTANTIATE_DOUBLE)
+#if CUOPT_INSTANTIATE_DOUBLE
       status = cuOptSetInitialPrimalSolution(settings, lvls, nvars);
       if (status != CUOPT_SUCCESS)
       {
@@ -336,6 +341,18 @@ int main(int argc, char *argv[])
     int is_qcp = (gmoModelType(gmo) == gmoProc_qcp || gmoModelType(gmo) == gmoProc_miqcp);
     int num_linear_constraints = 0;
     int num_quad_constraints = 0;
+
+    // cuOpt has no notion of SOS1/SOS2 sets or semi-integer variables. Reject such
+    // models explicitly instead of silently feeding the solver an incomplete/undefined
+    // variable type array.
+    if (gmoGetVarTypeCnt(gmo, gmovar_S1) || gmoGetVarTypeCnt(gmo, gmovar_S2) ||
+        gmoGetVarTypeCnt(gmo, gmovar_SI))
+    {
+      printOut(gev, "ERROR: cuOpt does not support SOS1, SOS2, or semi-integer variables.\n");
+      gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+      gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+      goto DONE;
+    }
 
     gams2cuopt_row = malloc(num_constraints * sizeof(int));
     orig_rhs = malloc(num_constraints * sizeof(cuopt_float_t));
@@ -425,7 +442,10 @@ int main(int argc, char *argv[])
         orig_sense[i] = CUOPT_GREATER_THAN;
         break;
       default:
-        printOut(gev, "Unknown row type %d\n", temp_equ_types[i]);
+        printOut(gev, "ERROR: Unsupported row type %d for row %d.\n", temp_equ_types[i], i);
+        orig_sense[i] = CUOPT_EQUAL; // avoid passing an uninitialized value to cuOpt
+        free(temp_equ_types);
+        goto DONE;
       }
     }
     free(temp_equ_types);
@@ -456,7 +476,11 @@ int main(int argc, char *argv[])
         has_integer_vars = 1;
         break;
       default:
-        printOut(gev, "Unknown variable type %d\n", temp_var_types[j]);
+        // SOS1/SOS2/semi-integer are rejected above; anything else is unexpected.
+        printOut(gev, "ERROR: Unsupported variable type %d for column %d.\n", temp_var_types[j], j);
+        variable_types[j] = CUOPT_CONTINUOUS; // avoid passing an uninitialized value to cuOpt
+        free(temp_var_types);
+        goto DONE;
       }
     }
     free(temp_var_types);
@@ -603,10 +627,17 @@ int main(int argc, char *argv[])
 
       if (qnz > 0)
       {
-        int lin_nz = 0, rnlnz = 0;
+        int lin_nz = 0, rnlnz = 0, gstatus;
         int *temp_lin_cols = malloc(num_variables * sizeof(int));
         double *temp_lin_vals = malloc(num_variables * sizeof(double));
-        gmoGetRowSparse(gmo, i, temp_lin_cols, temp_lin_vals, NULL, &lin_nz, &rnlnz);
+        gstatus = gmoGetRowSparse(gmo, i, temp_lin_cols, temp_lin_vals, NULL, &lin_nz, &rnlnz);
+        if (gstatus)
+        {
+          printOut(gev, "gmoGetRowSparse %d failed. Status: %d\n", i, gstatus);
+          free(temp_lin_cols);
+          free(temp_lin_vals);
+          goto DONE;
+        }
 
         cuopt_int_t *lin_cols = malloc(lin_nz * sizeof(cuopt_int_t));
         cuopt_float_t *lin_vals = malloc(lin_nz * sizeof(cuopt_float_t));
@@ -619,7 +650,19 @@ int main(int argc, char *argv[])
         int *temp_q_row = malloc(qnz * sizeof(int));
         int *temp_q_col = malloc(qnz * sizeof(int));
         double *temp_q_coef = malloc(qnz * sizeof(double));
-        gmoGetRowQ(gmo, i, temp_q_row, temp_q_col, temp_q_coef);
+        gstatus = gmoGetRowQ(gmo, i, temp_q_row, temp_q_col, temp_q_coef);
+        if (gstatus)
+        {
+          printOut(gev, "gmoGetRowQ %d failed. Status: %d\n", i, gstatus);
+          free(temp_lin_cols);
+          free(temp_lin_vals);
+          free(lin_cols);
+          free(lin_vals);
+          free(temp_q_row);
+          free(temp_q_col);
+          free(temp_q_coef);
+          goto DONE;
+        }
 
         cuopt_int_t *q_row = malloc(qnz * sizeof(cuopt_int_t));
         cuopt_int_t *q_col = malloc(qnz * sizeof(cuopt_int_t));
@@ -688,7 +731,7 @@ int main(int argc, char *argv[])
   {
     double *initial_levels = malloc(sizeof(double) * gmoN(gmo));
     gmoGetVarL(gmo, initial_levels);
-#ifdef CUOPT_INSTANTIATE_DOUBLE
+#if CUOPT_INSTANTIATE_DOUBLE
     status = cuOptAddMIPStart(settings, initial_levels, gmoN(gmo));
     if (status != CUOPT_SUCCESS)
     {
@@ -826,8 +869,18 @@ int main(int argc, char *argv[])
 
     int request_marginals = gevGetIntOpt(gev, gevRequestMarginals);
     cuopt_int_t presolve = 0, dual_postsolve = 0;
-    cuOptGetIntegerParameter(settings, "presolve", &presolve);
-    cuOptGetIntegerParameter(settings, "dual_postsolve", &dual_postsolve);
+    status = cuOptGetIntegerParameter(settings, CUOPT_PRESOLVE, &presolve);
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error querying presolve option.\n");
+      goto DONE;
+    }
+    status = cuOptGetIntegerParameter(settings, CUOPT_DUAL_POSTSOLVE, &dual_postsolve);
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error querying dual_postsolve option.\n");
+      goto DONE;
+    }
 
     int is_mip_model = gmoModelType(gmo) == gmoProc_mip || has_integer_vars;
     int is_linear_qcp = gmoModelType(gmo) == gmoProc_qcp && !has_integer_vars;
