@@ -118,6 +118,10 @@ jobs:
           EXPECTED="ERROR: cuOpt does not support SOS1, SOS2, or semi-integer variables."
           for cuda_dir in release-cu12 release-cu13; do
             cp "$cuda_dir"/* gamsdist/
+            # GAMS only auto-registers solvers from a file literally named
+            # gamsconfig.yaml, not gamsconfig_cuopt.yaml (see README's manual
+            # installation instructions, which rely on this rename/overwrite).
+            cp "$cuda_dir/gamsconfig_cuopt.yaml" gamsdist/gamsconfig.yaml
             for model in examples/models/capability_tests/*.gms; do
               name=$(basename "$model" .gms)
               lst="${cuda_dir}_${name}.lst"
