@@ -1,9 +1,3 @@
-# /// script
-# dependencies = [
-#   "pyyaml"
-# ]
-# ///
-
 from __future__ import annotations
 
 import argparse
@@ -20,8 +14,6 @@ import urllib.error
 import urllib.request
 import zipfile
 from typing import Optional, Tuple
-
-import yaml
 
 SOLVER_NAME = "cuopt"
 REPOSITORY = "GAMS-dev/cuoptlink-builder"
@@ -257,25 +249,65 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
     print(f"Backed up original `{config_path}` to `{backup_path}`.")
 
 
-def _load_config(path: str) -> dict:
+_TOP_LEVEL_KEY_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_.\-]*)[ \t]*:([ \t]|$)")
+_ENTRY_KEY_RE = re.compile(r"[ \t]*([A-Za-z_][A-Za-z0-9_.\-]*)[ \t]*:([ \t]|$)")
+
+
+def _get_top_level_keys(lines: list[str], path: str) -> list[str]:
+    keys: list[str] = []
+    for line in lines[: _get_document_end(lines)]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or re.match(r"^---([ \t]|$)", line):
+            continue
+        if line[0].isspace() or stripped == "-" or stripped.startswith("- "):
+            continue
+
+        match = _TOP_LEVEL_KEY_RE.match(line)
+        if not match:
+            print(
+                f"`{path}` must map configuration sections such as "
+                f"`{SOLVER_CONFIG_SECTION}` to their entries. Could not parse line: "
+                f"`{line}`."
+            )
+            raise SystemExit(1)
+        keys.append(match.group(1))
+
+    return keys
+
+
+def _load_top_level_keys(path: str) -> list[str]:
     with open(path, encoding="utf-8") as file:
-        try:
-            config = yaml.safe_load(file)
-        except yaml.YAMLError as e:
-            print(f"`{path}` is not a valid YAML file. Here is the error: {e}")
-            raise SystemExit(1) from e
+        lines = file.read().splitlines()
+    return _get_top_level_keys(lines, path)
 
-    if config is None:
-        return {}
 
-    if not isinstance(config, dict):
-        print(
-            f"`{path}` must map configuration sections such as "
-            f"`{SOLVER_CONFIG_SECTION}` to their entries."
-        )
-        raise SystemExit(1)
+def _solver_config_has_entry(lines: list[str], start: int, end: int, name: str) -> bool:
+    entries = lines[start:end]
+    dash_indent = _get_entry_indent(entries)
 
-    return config
+    if dash_indent is not None:
+        for entry in entries:
+            if not entry.startswith(dash_indent) or not entry[len(dash_indent) :].startswith("-"):
+                continue
+            match = _ENTRY_KEY_RE.match(entry[len(dash_indent) + 1 :])
+            if match and match.group(1) == name:
+                return True
+        return False
+
+    base_indent: Optional[str] = None
+    for entry in entries:
+        stripped = entry.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = entry[: len(entry) - len(entry.lstrip(" "))]
+        if base_indent is None:
+            base_indent = indent
+        if indent != base_indent:
+            continue
+        match = _ENTRY_KEY_RE.match(entry[len(base_indent) :])
+        if match and match.group(1) == name:
+            return True
+    return False
 
 
 def _find_section(lines: list[str], section: str, path: str) -> int | None:
@@ -340,7 +372,7 @@ def _reindent(entries: list[str], indent: str) -> list[str]:
 
 def _get_solver_config(gams_dir: str) -> list[str]:
     path = os.path.join(gams_dir, CUOPT_CONFIG_FILE)
-    if list(_load_config(path)) != [SOLVER_CONFIG_SECTION]:
+    if _load_top_level_keys(path) != [SOLVER_CONFIG_SECTION]:
         print(
             f"`{path}` of the release archive holds more than a "
             f"`{SOLVER_CONFIG_SECTION}` section, which cannot be merged into "
@@ -398,14 +430,15 @@ def _merge_cuopt_config(gams_dir: str) -> None:
         config_path = os.path.join(gams_dir, CONFIG_FILE)
 
         if os.path.isfile(config_path):
-            config = _load_config(config_path)
-            solver_config = config.get(SOLVER_CONFIG_SECTION)
             has_cuopt = False
-            if isinstance(solver_config, list):
-                has_cuopt = any(isinstance(item, dict) and SOLVER_NAME in item for item in solver_config)
-            elif isinstance(solver_config, dict):
-                has_cuopt = SOLVER_NAME in solver_config
-                
+            if SOLVER_CONFIG_SECTION in _load_top_level_keys(config_path):
+                with open(config_path, encoding="utf-8") as file:
+                    existing_lines = file.read().splitlines()
+                index = _find_section(existing_lines, SOLVER_CONFIG_SECTION, config_path)
+                if index is not None:
+                    end = _get_section_end(existing_lines, index + 1)
+                    has_cuopt = _solver_config_has_entry(existing_lines, index + 1, end, SOLVER_NAME)
+
             if has_cuopt:
                 print(f"`{SOLVER_NAME}` entry already exists in `{CONFIG_FILE}`. Skipping merge.")
                 return
