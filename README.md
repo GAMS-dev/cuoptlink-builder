@@ -25,7 +25,7 @@ __Quickstart:__ Run the following commands to download and execute the script:
 
 ```bash
 curl -O https://raw.githubusercontent.com/GAMS-dev/cuoptlink-builder/main/fetch-cuoptlink.py
-pip install requests pyyaml
+pip install pyyaml
 python fetch-cuoptlink.py
 ```
 

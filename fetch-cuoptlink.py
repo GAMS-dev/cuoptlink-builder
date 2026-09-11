@@ -1,6 +1,5 @@
 # /// script
 # dependencies = [
-#   "requests",
 #   "pyyaml"
 # ]
 # ///
@@ -9,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import json
 import os
 import platform
 import re
@@ -16,6 +16,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 import zipfile
 from typing import Optional, Tuple
 
@@ -150,26 +152,23 @@ def _prompt_cuda_version() -> Tuple[str, bool]:
 
 
 def _get_asset_urls(names: list[str], release_tag: Optional[str] = None) -> list[str]:
-    import requests
-
     if release_tag and release_tag.lower() != "latest":
         url = f"{BASE_RELEASE_URL}/tags/{release_tag}"
     else:
         url = f"{BASE_RELEASE_URL}/latest"
 
+    request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
     try:
-        response = requests.get(url, timeout=30)
-    except requests.RequestException as e:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read()
+    except urllib.error.HTTPError as e:
+        print(f"Failed to fetch release info ({e.code}): {e.read().decode(errors='replace')}")
+        raise SystemExit(1) from e
+    except urllib.error.URLError as e:
         print(f"Could not reach GitHub API ({url}): {e}")
         raise SystemExit(1) from e
 
-    if response.status_code != 200:
-        print(
-            f"Failed to fetch release info ({response.status_code}): {response.text}"
-        )
-        raise SystemExit(1)
-
-    release = response.json()
+    release = json.loads(body)
     assets = {
         asset["name"]: asset["browser_download_url"] for asset in release["assets"]
     }
@@ -198,17 +197,17 @@ def _format_size(num_bytes: int) -> str:
 
 
 def _download(url: str, path: str) -> None:
-    import requests
-
     name = os.path.basename(path)
     try:
-        with requests.get(url, stream=True, timeout=60) as response:
-            response.raise_for_status()
+        with urllib.request.urlopen(url, timeout=60) as response:
             total = int(response.headers.get("Content-Length", 0))
 
             with open(path, "wb") as file:
                 downloaded = 0
-                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
                     _ = file.write(chunk)
                     downloaded += len(chunk)
                     if total:
@@ -220,7 +219,7 @@ def _download(url: str, path: str) -> None:
                         sys.stdout.write(f"\r{name}: {_format_size(downloaded)}")
                     sys.stdout.flush()
                 sys.stdout.write("\n")
-    except requests.RequestException as e:
+    except (urllib.error.HTTPError, urllib.error.URLError) as e:
         print(f"Could not download {url}: {e}")
         raise SystemExit(1) from e
 
