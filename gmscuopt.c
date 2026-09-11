@@ -754,6 +754,8 @@ int main(int argc, char *argv[])
     printOut(gev, "MIP start has been set.\n");
   }
 
+  // EXPERIMENT
+  context.tstart = gevTimeJNow(gev);
   // Solve the problem
   status = cuOptSolve(problem, settings, &solution);
   if (status != CUOPT_SUCCESS) {
