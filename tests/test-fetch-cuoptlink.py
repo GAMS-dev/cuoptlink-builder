@@ -1,10 +1,13 @@
 """Unit tests for fetch-cuoptlink.py.
 
 Run with:
-    python3 -m unittest test_fetch_cuoptlink -v
+    python3 tests/test-fetch-cuoptlink.py -v
 
-The script under test has a hyphen in its filename, so it is loaded via
-importlib instead of a normal `import` statement.
+Both this test file and the script under test have hyphens in their
+filenames, so this file is run directly rather than via `python3 -m
+unittest <module>` (hyphenated names aren't importable as modules), and
+the script under test is loaded via importlib instead of a normal
+`import` statement.
 """
 
 from __future__ import annotations
@@ -18,7 +21,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-_MODULE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fetch-cuoptlink.py")
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_MODULE_PATH = os.path.join(_REPO_ROOT, "fetch-cuoptlink.py")
 
 
 def _load_module():
