@@ -297,6 +297,128 @@ class NormalMergeTest(TempGamsDirMixin, unittest.TestCase):
         self.assertEqual(self.read(fc.CONFIG_FILE), original)
 
 
+
+# A real-world gamsconfig.yaml, as found in the wild: comments, `---`/`...`
+# document markers, multiple unrelated top-level sections, a solverConfig
+# list entry (CPLEX) with deep nesting (a "library" sub-mapping) and
+# YAML 1.1-style capitalized booleans (True/False).
+REAL_WORLD_GAMSCONFIG_YAML = """---
+# 1) commandLineParameters: make CPLEX the default solver for the model
+#    types it supports, instead of the GAMS-shipped defaults.
+commandLineParameters:
+  - LP:
+      value: CPLEX
+  - MIP:
+      value: CPLEX
+  - RMIP:
+      value: CPLEX
+  - QCP:
+      value: CPLEX
+  - MIQCP:
+      value: CPLEX
+  - RMIQCP:
+      value: CPLEX
+
+# 2) environmentVariables: e.g. point GAMS at a CPLEX-related resource,
+#    only applied from GAMS 45 onward.
+environmentVariables:
+  - CPLEX_STUDIO_DIR:
+      value: /opt/ibm/ILOG/CPLEX_Studio2211
+      minVersion: 45
+
+# 3) solverConfig: hook up a custom/updated CPLEX build (e.g. linking
+#    against a newer CPLEX runtime than the one shipped with GAMS),
+#    re-using the name "CPLEX" so it replaces the built-in solver.
+#    The fileType/dictType/licCodes/scriptName/executableName/library
+#    values below mirror the real CPLEX entry in gmscmpNT.txt - only
+#    "libName" was changed to point at the custom build.
+solverConfig:
+  - CPLEX:
+      fileType: 2011
+      dictType: 5
+      licCodes: CPCL
+      defaultOkFlag: True
+      hiddenFlag: False
+      defName: optcplex.def
+      scriptName: gmsgennt.cmd
+      executableName: gmsgennx.exe
+      library:
+        libName: cpxcclib64_2211.dll
+        auditCode: cpx
+        solverInterfaceType: 1
+        threadSafeIndic: True
+      modelTypes:
+        - LP
+        - MIP
+        - RMIP
+        - QCP
+        - MIQCP
+        - RMIQCP
+...
+"""
+
+
+class RealWorldConfigMergeTest(TempGamsDirMixin, unittest.TestCase):
+    """A real, hand-maintained gamsconfig.yaml (comments, multiple sections,
+    an existing solverConfig list entry with deep nesting, YAML 1.1-style
+    booleans) must merge cleanly, keep the CPLEX entry intact, and gain a
+    cuopt entry - with both the pyyaml and the fallback engine."""
+
+    def assert_merges_cleanly(self, force_fallback: bool) -> None:
+        self.write(fc.CONFIG_FILE, REAL_WORLD_GAMSCONFIG_YAML)
+        self.write(fc.CUOPT_CONFIG_FILE, CUOPT_RELEASE_YAML)
+
+        patch_ctx = mock.patch.object(fc, "_pyyaml", None) if force_fallback else contextlib.nullcontext()
+        out = io.StringIO()
+        with patch_ctx:
+            with contextlib.redirect_stdout(out):
+                fc._merge_cuopt_config(self.gams_dir)
+
+            merged_path = os.path.join(self.gams_dir, fc.CONFIG_FILE)
+            merged_text = self.read(fc.CONFIG_FILE)
+
+            # Unrelated sections and the pre-existing CPLEX entry survive untouched.
+            self.assertIn("commandLineParameters:", merged_text)
+            self.assertIn("environmentVariables:", merged_text)
+            self.assertIn("CPLEX_STUDIO_DIR:", merged_text)
+            self.assertIn("cpxcclib64_2211.dll", merged_text)
+            self.assertIn(fc.MARKER_BEGIN, merged_text)
+            self.assertIn(fc.MARKER_END, merged_text)
+
+            # It still parses as valid, supported YAML, with both solvers registered.
+            config = fc._load_config(merged_path)
+            solver_config = config["solverConfig"]
+            names = [next(iter(item)) for item in solver_config if isinstance(item, dict)]
+            self.assertIn("CPLEX", names)
+            self.assertIn("cuopt", names)
+
+            # The CPLEX entry's own (deeply nested) content is unchanged.
+            cplex_entry = next(item["CPLEX"] for item in solver_config if "CPLEX" in item)
+            self.assertEqual(cplex_entry["library"]["libName"], "cpxcclib64_2211.dll")
+            self.assertEqual(cplex_entry["modelTypes"], ["LP", "MIP", "RMIP", "QCP", "MIQCP", "RMIQCP"])
+
+        self.assertFalse(os.path.exists(os.path.join(self.gams_dir, fc.CUOPT_CONFIG_FILE)))
+
+        # Running the merge again is a no-op: cuopt is already registered.
+        self.write(fc.CUOPT_CONFIG_FILE, CUOPT_RELEASE_YAML)
+        out2 = io.StringIO()
+        with patch_ctx, contextlib.redirect_stdout(out2):
+            fc._merge_cuopt_config(self.gams_dir)
+        self.assertIn("already exists", out2.getvalue())
+        self.assertEqual(self.read(fc.CONFIG_FILE).count(fc.MARKER_BEGIN), 1)
+
+        # Uninstalling removes only the cuopt entry, restoring the original file.
+        with patch_ctx, contextlib.redirect_stdout(io.StringIO()):
+            fc._remove_cuopt_from_config(self.gams_dir)
+        self.assertEqual(self.read(fc.CONFIG_FILE), REAL_WORLD_GAMSCONFIG_YAML)
+
+    def test_merges_cleanly_with_pyyaml_if_available(self):
+        self.assert_merges_cleanly(force_fallback=False)
+
+    def test_merges_cleanly_with_fallback_parser(self):
+        self.assert_merges_cleanly(force_fallback=True)
+
+
 class TimeoutErrorHandlingTest(unittest.TestCase):
     """Review finding #3: a direct TimeoutError must be handled cleanly, not crash."""
 
