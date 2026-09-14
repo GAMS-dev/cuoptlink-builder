@@ -1,30 +1,24 @@
-# /// script
-# dependencies = [
-#   "typer",
-#   "requests",
-#   "pyyaml"
-# ]
-# ///
-
 from __future__ import annotations
 
+import argparse
 import ctypes
+import json
 import os
 import platform
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import urllib.error
+import urllib.request
 import zipfile
 from typing import Optional, Tuple
 
-import typer
-import yaml
-
-app = typer.Typer(
-    help="Manage cuOpt solver link for standalone GAMS system on Linux.",
-    invoke_without_command=True,
-)
+try:
+    import yaml as _pyyaml
+except ImportError:
+    _pyyaml = None
 
 SOLVER_NAME = "cuopt"
 REPOSITORY = "GAMS-dev/cuoptlink-builder"
@@ -59,8 +53,8 @@ def _set_installed_files(gams_dir: str, files: list[str]) -> None:
 
 def _get_architecture() -> str:
     if platform.system() != "Linux":
-        typer.echo(f"`{SOLVER_NAME}` link installer only supports Linux systems.")
-        raise typer.Exit(code=1)
+        print(f"`{SOLVER_NAME}` link installer only supports Linux systems.")
+        raise SystemExit(1)
 
     machine = platform.machine().lower()
     if machine in ("x86_64", "amd64"):
@@ -68,8 +62,8 @@ def _get_architecture() -> str:
     if machine in ("aarch64", "arm64"):
         return "arm64"
 
-    typer.echo(f"`{SOLVER_NAME}` supports x86_64 and arm64, found {machine}.")
-    raise typer.Exit(code=1)
+    print(f"`{SOLVER_NAME}` supports x86_64 and arm64, found {machine}.")
+    raise SystemExit(1)
 
 
 def _detect_cuda_version() -> str | None:
@@ -91,34 +85,53 @@ def _get_default_gams_dir() -> Optional[str]:
     return None
 
 
+def _prompt(text: str, default: Optional[str] = None) -> str:
+    suffix = f" [{default}]" if default is not None else ""
+    while True:
+        value = input(f"{text}{suffix}: ").strip()
+        if value:
+            return value
+        if default is not None:
+            return default
+
+
+def _confirm(text: str, default: bool) -> bool:
+    choices = "Y/n" if default else "y/N"
+    while True:
+        value = input(f"{text} [{choices}]: ").strip().lower()
+        if not value:
+            return default
+        if value in ("y", "yes"):
+            return True
+        if value in ("n", "no"):
+            return False
+        print("Please answer 'y' or 'n'.")
+
+
 def _prompt_gams_dir() -> str:
     default_gams_dir = _get_default_gams_dir()
     while True:
-        prompt_kwargs = {}
-        if default_gams_dir:
-            prompt_kwargs["default"] = default_gams_dir
-
-        gams_dir_input = typer.prompt("GAMS system directory path", **prompt_kwargs)
+        gams_dir_input = _prompt("GAMS system directory path", default=default_gams_dir)
         gams_dir = os.path.abspath(os.path.expanduser(gams_dir_input))
 
         if os.path.isdir(gams_dir) and os.access(gams_dir, os.W_OK):
             return gams_dir
-        typer.echo(f"Error: Directory '{gams_dir}' does not exist or is not writable. Try again.\n")
+        print(f"Error: Directory '{gams_dir}' does not exist or is not writable. Try again.\n")
 
 
 def _prompt_cuda_version() -> Tuple[str, bool]:
     detected_cuda = _detect_cuda_version()
     if detected_cuda:
-        typer.echo(f"Detected CUDA runtime on system: CUDA {detected_cuda}")
+        print(f"Detected CUDA runtime on system: CUDA {detected_cuda}")
         default_cuda = detected_cuda
         has_detected_cuda = True
     else:
-        typer.echo("No CUDA runtime automatically detected on system.")
+        print("No CUDA runtime automatically detected on system.")
         default_cuda = DEFAULT_CUDA_VERSION
         has_detected_cuda = False
 
     versions_str = ", ".join(CUDA_VERSIONS)
-    cuda_version = typer.prompt(
+    cuda_version = _prompt(
         f"CUDA version (supported: {versions_str})",
         default=default_cuda,
     )
@@ -127,7 +140,7 @@ def _prompt_cuda_version() -> Tuple[str, bool]:
     # Otherwise, default runtime download to True.
     default_runtime_download = not has_detected_cuda
 
-    cuda_runtime = typer.confirm(
+    cuda_runtime = _confirm(
         "Download and install bundled CUDA runtime libraries?",
         default=default_runtime_download,
     )
@@ -136,26 +149,23 @@ def _prompt_cuda_version() -> Tuple[str, bool]:
 
 
 def _get_asset_urls(names: list[str], release_tag: Optional[str] = None) -> list[str]:
-    import requests
-
     if release_tag and release_tag.lower() != "latest":
         url = f"{BASE_RELEASE_URL}/tags/{release_tag}"
     else:
         url = f"{BASE_RELEASE_URL}/latest"
 
+    request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
     try:
-        response = requests.get(url, timeout=30)
-    except requests.RequestException as e:
-        typer.echo(f"Could not reach GitHub API ({url}): {e}")
-        raise typer.Exit(code=1) from e
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read()
+    except urllib.error.HTTPError as e:
+        print(f"Failed to fetch release info ({e.code}): {e.read().decode(errors='replace')}")
+        raise SystemExit(1) from e
+    except (urllib.error.URLError, TimeoutError) as e:
+        print(f"Could not reach GitHub API ({url}): {e}")
+        raise SystemExit(1) from e
 
-    if response.status_code != 200:
-        typer.echo(
-            f"Failed to fetch release info ({response.status_code}): {response.text}"
-        )
-        raise typer.Exit(code=1)
-
-    release = response.json()
+    release = json.loads(body)
     assets = {
         asset["name"]: asset["browser_download_url"] for asset in release["assets"]
     }
@@ -163,49 +173,52 @@ def _get_asset_urls(names: list[str], release_tag: Optional[str] = None) -> list
     urls = []
     for name in names:
         if name not in assets:
-            typer.echo(
+            print(
                 f"Release `{release['tag_name']}` does not contain `{name}`. "
                 f"Available assets: {sorted(assets)}"
             )
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
         urls.append(assets[name])
 
-    typer.echo(f"Installing `{SOLVER_NAME}` from release `{release['tag_name']}`...")
+    print(f"Installing `{SOLVER_NAME}` from release `{release['tag_name']}`...")
     return urls
 
 
-def _download(url: str, path: str) -> None:
-    import requests
-    from rich.progress import (
-        BarColumn,
-        DownloadColumn,
-        Progress,
-        TextColumn,
-        TimeRemainingColumn,
-    )
+def _format_size(num_bytes: int) -> str:
+    size = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024:
+            return f"{size:.1f}{unit}"
+        size /= 1024
+    return f"{size:.1f}TB"
 
+
+def _download(url: str, path: str) -> None:
     name = os.path.basename(path)
     try:
-        with requests.get(url, stream=True, timeout=60) as response:
-            response.raise_for_status()
+        with urllib.request.urlopen(url, timeout=60) as response:
             total = int(response.headers.get("Content-Length", 0))
 
-            with (
-                Progress(
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(),
-                    DownloadColumn(),
-                    TimeRemainingColumn(),
-                ) as progress,
-                open(path, "wb") as file,
-            ):
-                task = progress.add_task(name, total=total or None)
-                for chunk in response.iter_content(chunk_size=1024 * 1024):
+            with open(path, "wb") as file:
+                downloaded = 0
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
                     _ = file.write(chunk)
-                    progress.update(task, advance=len(chunk))
-    except requests.RequestException as e:
-        typer.echo(f"Could not download {url}: {e}")
-        raise typer.Exit(code=1) from e
+                    downloaded += len(chunk)
+                    if total:
+                        pct = downloaded * 100 // total
+                        sys.stdout.write(
+                            f"\r{name}: {pct:3d}% ({_format_size(downloaded)}/{_format_size(total)})"
+                        )
+                    else:
+                        sys.stdout.write(f"\r{name}: {_format_size(downloaded)}")
+                    sys.stdout.flush()
+                sys.stdout.write("\n")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+        print(f"Could not download {url}: {e}")
+        raise SystemExit(1) from e
 
 
 def _extract(path: str, directory: str) -> list[str]:
@@ -238,26 +251,287 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
 
     backup_path = os.path.join(gams_dir, BACKUP_FILE)
     shutil.copy2(config_path, backup_path)
-    typer.echo(f"Backed up original `{config_path}` to `{backup_path}`.")
+    print(f"Backed up original `{config_path}` to `{backup_path}`.")
+
+
+# --- Minimal, conservative YAML subset reader ------------------------------
+#
+# `gamsconfig.yaml` is arbitrary, user-editable YAML, so it must be parsed
+# correctly (not merely "well enough") before this tool ever rewrites it. If
+# `pyyaml` happens to be installed, `_yaml_safe_load` below uses it directly
+# for full YAML support. Otherwise - keeping this script dependency-free -
+# it falls back to a hand-rolled parser that only understands a conservative
+# *subset* of block-style YAML (nested mappings and sequences, bare/quoted
+# scalar keys, single-line scalar values) and raises `_YamlError` for
+# anything else - flow collections (`{...}`/`[...]`), anchors/aliases/tags,
+# multi-document streams, block scalars (`|`/`>`), tab indentation, or
+# unterminated quotes included. Either way, unrecognized or malformed input
+# is rejected outright rather than misparsed, and the file is left untouched.
+
+
+class _YamlError(Exception):
+    pass
+
+
+_YAML_BARE_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*")
+
+
+def _yaml_strip_comment(text: str) -> str:
+    result = []
+    quote = None
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if quote:
+            result.append(char)
+            if quote == '"' and char == "\\" and i + 1 < len(text):
+                i += 1
+                result.append(text[i])
+            elif char == quote:
+                quote = None
+        elif char in ("'", '"'):
+            quote = char
+            result.append(char)
+        elif char == "#" and (i == 0 or text[i - 1] in " \t"):
+            break
+        else:
+            result.append(char)
+        i += 1
+    return "".join(result)
+
+
+def _yaml_validate_quoted(value: str) -> None:
+    quote = value[0]
+    i = 1
+    while i < len(value):
+        char = value[i]
+        if quote == '"' and char == "\\" and i + 1 < len(value):
+            i += 2
+            continue
+        if char == quote:
+            remainder = value[i + 1 :].strip()
+            if remainder and not remainder.startswith("#"):
+                raise _YamlError(f"unexpected content after quoted scalar: {value!r}")
+            return
+        i += 1
+    raise _YamlError(f"unterminated quoted scalar: {value!r}")
+
+
+def _yaml_validate_scalar(text: str) -> str:
+    value = _yaml_strip_comment(text).strip()
+    if not value:
+        return ""
+    if value[0] in "&*!?|>%@`":
+        raise _YamlError(f"unsupported YAML construct: {value!r}")
+    if value[0] in ("'", '"'):
+        _yaml_validate_quoted(value)
+        return value
+    if re.search(r"[\[\]{}]", value):
+        raise _YamlError(f"unsupported YAML construct (flow collections are not supported): {value!r}")
+    return value
+
+
+def _yaml_split_key(content: str) -> Tuple[str, str] | None:
+    if content.startswith('"'):
+        end = 1
+        while end < len(content) and content[end] != '"':
+            if content[end] == "\\" and end + 1 < len(content):
+                end += 2
+            else:
+                end += 1
+        if end >= len(content):
+            raise _YamlError(f"unterminated double-quoted key: {content!r}")
+        key, rest = content[1:end], content[end + 1 :]
+    elif content.startswith("'"):
+        end = content.find("'", 1)
+        if end == -1:
+            raise _YamlError(f"unterminated single-quoted key: {content!r}")
+        key, rest = content[1:end], content[end + 1 :]
+    else:
+        match = _YAML_BARE_KEY_RE.match(content)
+        if not match:
+            return None
+        key, rest = match.group(0), content[match.end() :]
+
+    rest = rest.lstrip(" \t")
+    if not rest.startswith(":"):
+        return None
+    if len(rest) > 1 and rest[1] not in (" ", "\t", "#"):
+        return None
+    return key, rest[1:]
+
+
+def _yaml_require_key(content: str) -> Tuple[str, str]:
+    split = _yaml_split_key(content)
+    if split is None:
+        raise _YamlError(f"expected a mapping entry (`key:` or `key: value`) at: {content!r}")
+    return split
+
+
+class _YamlLine:
+    __slots__ = ("indent", "is_dash", "virtual_indent", "content")
+
+    def __init__(self, indent: int, is_dash: bool, virtual_indent: int, content: str) -> None:
+        self.indent = indent
+        self.is_dash = is_dash
+        self.virtual_indent = virtual_indent
+        self.content = content
+
+
+def _yaml_prepare_lines(text: str) -> list[_YamlLine]:
+    prepared: list[_YamlLine] = []
+    seen_content = False
+    for raw in text.splitlines():
+        if re.match(r"^---([ \t]|$)", raw):
+            if seen_content:
+                raise _YamlError("multi-document YAML streams are not supported")
+            continue
+        if re.match(r"^\.\.\.([ \t]|$)", raw):
+            break
+
+        indent = len(raw) - len(raw.lstrip(" "))
+        if "\t" in raw[:indent] or raw[indent : indent + 1] == "\t":
+            raise _YamlError(f"tab indentation is not supported: {raw!r}")
+
+        content = _yaml_strip_comment(raw[indent:]).rstrip()
+        if not content:
+            continue
+
+        seen_content = True
+        if content[0] == "-" and (len(content) == 1 or content[1] in " \t"):
+            after_dash = content[1:]
+            after_dash_stripped = after_dash.lstrip(" \t")
+            consumed = len(after_dash) - len(after_dash_stripped)
+            prepared.append(
+                _YamlLine(
+                    indent=indent,
+                    is_dash=True,
+                    virtual_indent=indent + 1 + consumed,
+                    content=after_dash_stripped,
+                )
+            )
+        else:
+            prepared.append(_YamlLine(indent=indent, is_dash=False, virtual_indent=indent, content=content))
+
+    return prepared
+
+
+def _yaml_parse_node(lines: list[_YamlLine], idx: int, min_indent: int):
+    if idx >= len(lines) or lines[idx].indent < min_indent:
+        return None, idx
+    node_indent = lines[idx].indent
+    if lines[idx].is_dash:
+        return _yaml_parse_sequence(lines, idx, node_indent)
+    return _yaml_parse_mapping(lines, idx, node_indent)
+
+
+def _yaml_parse_value(lines: list[_YamlLine], idx: int, key_indent: int):
+    # A mapping value that continues on following lines is either a nested
+    # mapping (which YAML requires to be indented *more* than its key) or a
+    # nested sequence (which YAML additionally allows to align with its key's
+    # own indentation - "key:\n- a\n- b" is valid, unlike a nested mapping at
+    # that same indentation, which would instead be read as a sibling key).
+    if idx >= len(lines):
+        return None, idx
+    nxt = lines[idx]
+    if nxt.is_dash:
+        if nxt.indent < key_indent:
+            return None, idx
+        return _yaml_parse_sequence(lines, idx, nxt.indent)
+    if nxt.indent <= key_indent:
+        return None, idx
+    return _yaml_parse_mapping(lines, idx, nxt.indent)
+
+
+def _yaml_parse_sequence(lines: list[_YamlLine], idx: int, indent: int):
+    items: list = []
+    while idx < len(lines) and lines[idx].indent == indent and lines[idx].is_dash:
+        remainder = lines[idx].content
+        virtual_indent = lines[idx].virtual_indent
+        idx += 1
+
+        if remainder == "":
+            value, idx = _yaml_parse_node(lines, idx, indent + 1)
+            items.append(value)
+            continue
+
+        split = _yaml_split_key(remainder)
+        if split is None:
+            items.append(_yaml_validate_scalar(remainder))
+            continue
+
+        key, rest = split
+        mapping: dict = {}
+        if rest.strip() == "":
+            value, idx = _yaml_parse_value(lines, idx, virtual_indent)
+        else:
+            value = _yaml_validate_scalar(rest)
+        mapping[key] = value
+
+        while idx < len(lines) and lines[idx].indent == virtual_indent and not lines[idx].is_dash:
+            key2, rest2 = _yaml_require_key(lines[idx].content)
+            idx += 1
+            if rest2.strip() == "":
+                value2, idx = _yaml_parse_value(lines, idx, virtual_indent)
+            else:
+                value2 = _yaml_validate_scalar(rest2)
+            mapping[key2] = value2
+
+        items.append(mapping)
+
+    return items, idx
+
+
+def _yaml_parse_mapping(lines: list[_YamlLine], idx: int, indent: int):
+    result: dict = {}
+    while idx < len(lines) and lines[idx].indent == indent and not lines[idx].is_dash:
+        key, rest = _yaml_require_key(lines[idx].content)
+        idx += 1
+        if rest.strip() == "":
+            value, idx = _yaml_parse_value(lines, idx, indent)
+        else:
+            value = _yaml_validate_scalar(rest)
+        result[key] = value
+    return result, idx
+
+
+def _yaml_safe_load(path: str) -> object:
+    if _pyyaml is not None:
+        with open(path, encoding="utf-8") as file:
+            try:
+                return _pyyaml.safe_load(file)
+            except _pyyaml.YAMLError as e:
+                raise _YamlError(str(e)) from e
+
+    with open(path, encoding="utf-8") as file:
+        text = file.read()
+
+    lines = _yaml_prepare_lines(text)
+    if not lines:
+        return None
+
+    value, idx = _yaml_parse_node(lines, 0, 0)
+    if idx != len(lines):
+        raise _YamlError(f"unexpected content at: {lines[idx].content!r}")
+    return value
 
 
 def _load_config(path: str) -> dict:
-    with open(path, encoding="utf-8") as file:
-        try:
-            config = yaml.safe_load(file)
-        except yaml.YAMLError as e:
-            typer.echo(f"`{path}` is not a valid YAML file. Here is the error: {e}")
-            raise typer.Exit(code=1) from e
+    try:
+        config = _yaml_safe_load(path)
+    except _YamlError as e:
+        print(f"`{path}` is not a valid YAML file. Here is the error: {e}")
+        raise SystemExit(1) from e
 
     if config is None:
         return {}
 
     if not isinstance(config, dict):
-        typer.echo(
+        print(
             f"`{path}` must map configuration sections such as "
             f"`{SOLVER_CONFIG_SECTION}` to their entries."
         )
-        raise typer.Exit(code=1)
+        raise SystemExit(1)
 
     return config
 
@@ -268,12 +542,12 @@ def _find_section(lines: list[str], section: str, path: str) -> int | None:
             continue
 
         if not re.match(rf"{re.escape(section)}[ \t]*:[ \t]*(#.*)?$", line):
-            typer.echo(
+            print(
                 f"`{section}` of `{path}` is not written as a block of entries, "
                 f"hence we cannot add `{SOLVER_NAME}` to it. Please add the "
                 f"entry by hand."
             )
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
 
         return index
 
@@ -325,20 +599,20 @@ def _reindent(entries: list[str], indent: str) -> list[str]:
 def _get_solver_config(gams_dir: str) -> list[str]:
     path = os.path.join(gams_dir, CUOPT_CONFIG_FILE)
     if list(_load_config(path)) != [SOLVER_CONFIG_SECTION]:
-        typer.echo(
+        print(
             f"`{path}` of the release archive holds more than a "
             f"`{SOLVER_CONFIG_SECTION}` section, which cannot be merged into "
             f"`{CONFIG_FILE}`. Please add its content to `{CONFIG_FILE}` by hand."
         )
-        raise typer.Exit(code=1)
+        raise SystemExit(1)
 
     with open(path, encoding="utf-8") as file:
         lines = file.read().splitlines()
 
     index = _find_section(lines, SOLVER_CONFIG_SECTION, path)
     if index is None:
-        typer.echo(f"`{path}` of the release archive does not register a solver.")
-        raise typer.Exit(code=1)
+        print(f"`{path}` of the release archive does not register a solver.")
+        raise SystemExit(1)
 
     return lines[index + 1 : _get_section_end(lines, index + 1)]
 
@@ -389,9 +663,9 @@ def _merge_cuopt_config(gams_dir: str) -> None:
                 has_cuopt = any(isinstance(item, dict) and SOLVER_NAME in item for item in solver_config)
             elif isinstance(solver_config, dict):
                 has_cuopt = SOLVER_NAME in solver_config
-                
+
             if has_cuopt:
-                typer.echo(f"`{SOLVER_NAME}` entry already exists in `{CONFIG_FILE}`. Skipping merge.")
+                print(f"`{SOLVER_NAME}` entry already exists in `{CONFIG_FILE}`. Skipping merge.")
                 return
 
         entries = _get_solver_config(gams_dir)
@@ -406,10 +680,10 @@ def _merge_cuopt_config(gams_dir: str) -> None:
         with open(config_path, "w", encoding="utf-8") as file:
             file.write(_merge_solver_config(text, entries, config_path))
 
-        typer.echo(f"Merged `{CUOPT_CONFIG_FILE}` into `{CONFIG_FILE}`.")
+        print(f"Merged `{CUOPT_CONFIG_FILE}` into `{CONFIG_FILE}`.")
     except Exception as e:
-        typer.echo(f"Failed to merge config:\n{e}")
-        raise typer.Exit(code=1) from e
+        print(f"Failed to merge config:\n{e}")
+        raise SystemExit(1) from e
     finally:
         if os.path.exists(cuopt_cfg):
             os.unlink(cuopt_cfg)
@@ -430,13 +704,13 @@ def _remove_cuopt_from_config(gams_dir: str) -> None:
             with open(config_path, "w", encoding="utf-8") as file:
                 file.write(remaining)
 
-        typer.echo(f"Removed `{SOLVER_NAME}` entry from `{CONFIG_FILE}`.")
+        print(f"Removed `{SOLVER_NAME}` entry from `{CONFIG_FILE}`.")
     except Exception as e:
-        typer.echo(f"Warning: Failed to remove `{SOLVER_NAME}` from `{CONFIG_FILE}`: {e}")
+        print(f"Warning: Failed to remove `{SOLVER_NAME}` from `{CONFIG_FILE}`: {e}")
 
 
 def _test_installation(gams_dir: str) -> None:
-    typer.echo("Testing installation with GAMS trnsport model...")
+    print("Testing installation with GAMS trnsport model...")
     gamslib_bin = os.path.join(gams_dir, "gamslib")
     gams_bin = os.path.join(gams_dir, "gams")
 
@@ -455,17 +729,17 @@ def _test_installation(gams_dir: str) -> None:
                 cwd=temp_dir,
                 check=True,
             )
-            typer.echo("Installation test completed successfully!")
+            print("Installation test completed successfully!")
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            typer.echo(f"Installation test failed: {e}")
-            raise typer.Exit(code=1) from e
+            print(f"Installation test failed: {e}")
+            raise SystemExit(1) from e
 
 
 def _run_interactive_install() -> None:
     gams_dir = _prompt_gams_dir()
     cuda_version, cuda_runtime = _prompt_cuda_version()
 
-    release = typer.prompt(
+    release = _prompt(
         "cuoptlink-builder release version",
         default="latest",
     )
@@ -485,18 +759,18 @@ def _execute_install(
         cuda_version = _detect_cuda_version()
         if cuda_version is None:
             if not cuda_runtime:
-                typer.echo(
+                print(
                     "CUDA runtime auto-detection failed. Pass `--cuda-version` "
                     "or enable `--cuda-runtime`."
                 )
-                raise typer.Exit(code=1)
+                raise SystemExit(1)
             cuda_version = DEFAULT_CUDA_VERSION
         else:
-            typer.echo(f"Detected CUDA runtime version {cuda_version}.")
+            print(f"Detected CUDA runtime version {cuda_version}.")
 
     if cuda_version not in CUDA_VERSIONS:
-        typer.echo(f"Unsupported CUDA version `{cuda_version}`. Choice: {CUDA_VERSIONS}")
-        raise typer.Exit(code=1)
+        print(f"Unsupported CUDA version `{cuda_version}`. Choice: {CUDA_VERSIONS}")
+        raise SystemExit(1)
 
     archives = [f"cuopt-link-release-cu{cuda_version}-{architecture}.zip"]
     if cuda_runtime:
@@ -520,7 +794,7 @@ def _execute_install(
     files.discard(CONFIG_FILE)
 
     _set_installed_files(gams_dir, sorted(files))
-    typer.echo(f"Successfully installed `{SOLVER_NAME}` into `{gams_dir}`.")
+    print(f"Successfully installed `{SOLVER_NAME}` into `{gams_dir}`.")
 
     _test_installation(gams_dir)
 
@@ -529,8 +803,8 @@ def _execute_uninstall(gams_dir: str) -> None:
     _get_architecture()
     installed_files = get_installed_files(gams_dir)
     if not installed_files:
-        typer.echo(f"`{SOLVER_NAME}` is not recorded as installed in `{gams_dir}`.")
-        raise typer.Exit(code=1)
+        print(f"`{SOLVER_NAME}` is not recorded as installed in `{gams_dir}`.")
+        raise SystemExit(1)
 
     for name in installed_files:
         if name == CONFIG_FILE:
@@ -547,61 +821,70 @@ def _execute_uninstall(gams_dir: str) -> None:
     except FileNotFoundError:
         pass
 
-    typer.echo(f"Successfully uninstalled `{SOLVER_NAME}` from `{gams_dir}`.")
+    print(f"Successfully uninstalled `{SOLVER_NAME}` from `{gams_dir}`.")
 
 
-@app.callback(invoke_without_command=True)
-def main(ctx: typer.Context) -> None:
-    if ctx.invoked_subcommand is None:
-        _run_interactive_install()
-
-
-@app.command()
-def install(
-    gams_dir: Optional[str] = typer.Option(
-        None,
-        "--gams-dir",
-        "-g",
-        help="Path to the GAMS system directory.",
-    ),
-    cuda_version: Optional[str] = typer.Option(
-        None,
-        "--cuda-version",
-        "-c",
-        help="CUDA version (12 or 13). Auto-detected if omitted.",
-    ),
-    cuda_runtime: bool = typer.Option(
-        False,
-        "--cuda-runtime",
-        help="Download and unpack bundled CUDA runtime libraries.",
-    ),
-    release: Optional[str] = typer.Option(
-        "latest",
-        "--release",
-        "-r",
-        help="Tag name of cuoptlink-builder release (e.g. v1.0.0 or 'latest').",
-    ),
-) -> None:
-    """Install the cuOpt link into a target GAMS system directory."""
+def _install_command(args: argparse.Namespace) -> None:
+    gams_dir = args.gams_dir
     if gams_dir is None:
         gams_dir = _prompt_gams_dir()
-    _execute_install(gams_dir, cuda_version, cuda_runtime, release)
+    _execute_install(gams_dir, args.cuda_version, args.cuda_runtime, args.release)
 
 
-@app.command()
-def uninstall(
-    gams_dir: Optional[str] = typer.Option(
-        None,
-        "--gams-dir",
-        "-g",
-        help="Path to the GAMS system directory.",
-    ),
-) -> None:
-    """Uninstall the cuOpt link from a target GAMS system directory."""
+def _uninstall_command(args: argparse.Namespace) -> None:
+    gams_dir = args.gams_dir
     if gams_dir is None:
         gams_dir = _prompt_gams_dir()
     _execute_uninstall(gams_dir)
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Manage cuOpt solver link for standalone GAMS system on Linux.",
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    install_parser = subparsers.add_parser(
+        "install", help="Install the cuOpt link into a target GAMS system directory."
+    )
+    install_parser.add_argument(
+        "--gams-dir", "-g", dest="gams_dir", default=None,
+        help="Path to the GAMS system directory.",
+    )
+    install_parser.add_argument(
+        "--cuda-version", "-c", dest="cuda_version", default=None,
+        help="CUDA version (12 or 13). Auto-detected if omitted.",
+    )
+    install_parser.add_argument(
+        "--cuda-runtime", dest="cuda_runtime", action="store_true", default=False,
+        help="Download and unpack bundled CUDA runtime libraries.",
+    )
+    install_parser.add_argument(
+        "--release", "-r", dest="release", default="latest",
+        help="Tag name of cuoptlink-builder release (e.g. v1.0.0 or 'latest').",
+    )
+    install_parser.set_defaults(func=_install_command)
+
+    uninstall_parser = subparsers.add_parser(
+        "uninstall", help="Uninstall the cuOpt link from a target GAMS system directory."
+    )
+    uninstall_parser.add_argument(
+        "--gams-dir", "-g", dest="gams_dir", default=None,
+        help="Path to the GAMS system directory.",
+    )
+    uninstall_parser.set_defaults(func=_uninstall_command)
+
+    return parser
+
+
+def main() -> None:
+    parser = _build_parser()
+    args = parser.parse_args()
+    if args.command is None:
+        _run_interactive_install()
+    else:
+        args.func(args)
+
+
 if __name__ == "__main__":
-    app()
+    main()
