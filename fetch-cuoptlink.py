@@ -15,6 +15,11 @@ import urllib.request
 import zipfile
 from typing import Optional, Tuple
 
+try:
+    import yaml as _pyyaml
+except ImportError:
+    _pyyaml = None
+
 SOLVER_NAME = "cuopt"
 REPOSITORY = "GAMS-dev/cuoptlink-builder"
 BASE_RELEASE_URL = f"https://api.github.com/repos/{REPOSITORY}/releases"
@@ -156,7 +161,7 @@ def _get_asset_urls(names: list[str], release_tag: Optional[str] = None) -> list
     except urllib.error.HTTPError as e:
         print(f"Failed to fetch release info ({e.code}): {e.read().decode(errors='replace')}")
         raise SystemExit(1) from e
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, TimeoutError) as e:
         print(f"Could not reach GitHub API ({url}): {e}")
         raise SystemExit(1) from e
 
@@ -211,7 +216,7 @@ def _download(url: str, path: str) -> None:
                         sys.stdout.write(f"\r{name}: {_format_size(downloaded)}")
                     sys.stdout.flush()
                 sys.stdout.write("\n")
-    except (urllib.error.HTTPError, urllib.error.URLError) as e:
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
         print(f"Could not download {url}: {e}")
         raise SystemExit(1) from e
 
@@ -249,65 +254,286 @@ def _backup_config(gams_dir: str, installed_files: list[str]) -> None:
     print(f"Backed up original `{config_path}` to `{backup_path}`.")
 
 
-_TOP_LEVEL_KEY_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_.\-]*)[ \t]*:([ \t]|$)")
-_ENTRY_KEY_RE = re.compile(r"[ \t]*([A-Za-z_][A-Za-z0-9_.\-]*)[ \t]*:([ \t]|$)")
+# --- Minimal, conservative YAML subset reader ------------------------------
+#
+# `gamsconfig.yaml` is arbitrary, user-editable YAML, so it must be parsed
+# correctly (not merely "well enough") before this tool ever rewrites it. If
+# `pyyaml` happens to be installed, `_yaml_safe_load` below uses it directly
+# for full YAML support. Otherwise - keeping this script dependency-free -
+# it falls back to a hand-rolled parser that only understands a conservative
+# *subset* of block-style YAML (nested mappings and sequences, bare/quoted
+# scalar keys, single-line scalar values) and raises `_YamlError` for
+# anything else - flow collections (`{...}`/`[...]`), anchors/aliases/tags,
+# multi-document streams, block scalars (`|`/`>`), tab indentation, or
+# unterminated quotes included. Either way, unrecognized or malformed input
+# is rejected outright rather than misparsed, and the file is left untouched.
 
 
-def _get_top_level_keys(lines: list[str], path: str) -> list[str]:
-    keys: list[str] = []
-    for line in lines[: _get_document_end(lines)]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or re.match(r"^---([ \t]|$)", line):
+class _YamlError(Exception):
+    pass
+
+
+_YAML_BARE_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*")
+
+
+def _yaml_strip_comment(text: str) -> str:
+    result = []
+    quote = None
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if quote:
+            result.append(char)
+            if quote == '"' and char == "\\" and i + 1 < len(text):
+                i += 1
+                result.append(text[i])
+            elif char == quote:
+                quote = None
+        elif char in ("'", '"'):
+            quote = char
+            result.append(char)
+        elif char == "#" and (i == 0 or text[i - 1] in " \t"):
+            break
+        else:
+            result.append(char)
+        i += 1
+    return "".join(result)
+
+
+def _yaml_validate_quoted(value: str) -> None:
+    quote = value[0]
+    i = 1
+    while i < len(value):
+        char = value[i]
+        if quote == '"' and char == "\\" and i + 1 < len(value):
+            i += 2
             continue
-        if line[0].isspace() or stripped == "-" or stripped.startswith("- "):
-            continue
+        if char == quote:
+            remainder = value[i + 1 :].strip()
+            if remainder and not remainder.startswith("#"):
+                raise _YamlError(f"unexpected content after quoted scalar: {value!r}")
+            return
+        i += 1
+    raise _YamlError(f"unterminated quoted scalar: {value!r}")
 
-        match = _TOP_LEVEL_KEY_RE.match(line)
+
+def _yaml_validate_scalar(text: str) -> str:
+    value = _yaml_strip_comment(text).strip()
+    if not value:
+        return ""
+    if value[0] in "&*!?|>%@`":
+        raise _YamlError(f"unsupported YAML construct: {value!r}")
+    if value[0] in ("'", '"'):
+        _yaml_validate_quoted(value)
+        return value
+    if re.search(r"[\[\]{}]", value):
+        raise _YamlError(f"unsupported YAML construct (flow collections are not supported): {value!r}")
+    return value
+
+
+def _yaml_split_key(content: str) -> Tuple[str, str] | None:
+    if content.startswith('"'):
+        end = 1
+        while end < len(content) and content[end] != '"':
+            if content[end] == "\\" and end + 1 < len(content):
+                end += 2
+            else:
+                end += 1
+        if end >= len(content):
+            raise _YamlError(f"unterminated double-quoted key: {content!r}")
+        key, rest = content[1:end], content[end + 1 :]
+    elif content.startswith("'"):
+        end = content.find("'", 1)
+        if end == -1:
+            raise _YamlError(f"unterminated single-quoted key: {content!r}")
+        key, rest = content[1:end], content[end + 1 :]
+    else:
+        match = _YAML_BARE_KEY_RE.match(content)
         if not match:
-            print(
-                f"`{path}` must map configuration sections such as "
-                f"`{SOLVER_CONFIG_SECTION}` to their entries. Could not parse line: "
-                f"`{line}`."
+            return None
+        key, rest = match.group(0), content[match.end() :]
+
+    rest = rest.lstrip(" \t")
+    if not rest.startswith(":"):
+        return None
+    if len(rest) > 1 and rest[1] not in (" ", "\t", "#"):
+        return None
+    return key, rest[1:]
+
+
+def _yaml_require_key(content: str) -> Tuple[str, str]:
+    split = _yaml_split_key(content)
+    if split is None:
+        raise _YamlError(f"expected a mapping entry (`key:` or `key: value`) at: {content!r}")
+    return split
+
+
+class _YamlLine:
+    __slots__ = ("indent", "is_dash", "virtual_indent", "content")
+
+    def __init__(self, indent: int, is_dash: bool, virtual_indent: int, content: str) -> None:
+        self.indent = indent
+        self.is_dash = is_dash
+        self.virtual_indent = virtual_indent
+        self.content = content
+
+
+def _yaml_prepare_lines(text: str) -> list[_YamlLine]:
+    prepared: list[_YamlLine] = []
+    seen_content = False
+    for raw in text.splitlines():
+        if re.match(r"^---([ \t]|$)", raw):
+            if seen_content:
+                raise _YamlError("multi-document YAML streams are not supported")
+            continue
+        if re.match(r"^\.\.\.([ \t]|$)", raw):
+            break
+
+        indent = len(raw) - len(raw.lstrip(" "))
+        if "\t" in raw[:indent] or raw[indent : indent + 1] == "\t":
+            raise _YamlError(f"tab indentation is not supported: {raw!r}")
+
+        content = _yaml_strip_comment(raw[indent:]).rstrip()
+        if not content:
+            continue
+
+        seen_content = True
+        if content[0] == "-" and (len(content) == 1 or content[1] in " \t"):
+            after_dash = content[1:]
+            after_dash_stripped = after_dash.lstrip(" \t")
+            consumed = len(after_dash) - len(after_dash_stripped)
+            prepared.append(
+                _YamlLine(
+                    indent=indent,
+                    is_dash=True,
+                    virtual_indent=indent + 1 + consumed,
+                    content=after_dash_stripped,
+                )
             )
-            raise SystemExit(1)
-        keys.append(match.group(1))
+        else:
+            prepared.append(_YamlLine(indent=indent, is_dash=False, virtual_indent=indent, content=content))
 
-    return keys
+    return prepared
 
 
-def _load_top_level_keys(path: str) -> list[str]:
+def _yaml_parse_node(lines: list[_YamlLine], idx: int, min_indent: int):
+    if idx >= len(lines) or lines[idx].indent < min_indent:
+        return None, idx
+    node_indent = lines[idx].indent
+    if lines[idx].is_dash:
+        return _yaml_parse_sequence(lines, idx, node_indent)
+    return _yaml_parse_mapping(lines, idx, node_indent)
+
+
+def _yaml_parse_value(lines: list[_YamlLine], idx: int, key_indent: int):
+    # A mapping value that continues on following lines is either a nested
+    # mapping (which YAML requires to be indented *more* than its key) or a
+    # nested sequence (which YAML additionally allows to align with its key's
+    # own indentation - "key:\n- a\n- b" is valid, unlike a nested mapping at
+    # that same indentation, which would instead be read as a sibling key).
+    if idx >= len(lines):
+        return None, idx
+    nxt = lines[idx]
+    if nxt.is_dash:
+        if nxt.indent < key_indent:
+            return None, idx
+        return _yaml_parse_sequence(lines, idx, nxt.indent)
+    if nxt.indent <= key_indent:
+        return None, idx
+    return _yaml_parse_mapping(lines, idx, nxt.indent)
+
+
+def _yaml_parse_sequence(lines: list[_YamlLine], idx: int, indent: int):
+    items: list = []
+    while idx < len(lines) and lines[idx].indent == indent and lines[idx].is_dash:
+        remainder = lines[idx].content
+        virtual_indent = lines[idx].virtual_indent
+        idx += 1
+
+        if remainder == "":
+            value, idx = _yaml_parse_node(lines, idx, indent + 1)
+            items.append(value)
+            continue
+
+        split = _yaml_split_key(remainder)
+        if split is None:
+            items.append(_yaml_validate_scalar(remainder))
+            continue
+
+        key, rest = split
+        mapping: dict = {}
+        if rest.strip() == "":
+            value, idx = _yaml_parse_value(lines, idx, virtual_indent)
+        else:
+            value = _yaml_validate_scalar(rest)
+        mapping[key] = value
+
+        while idx < len(lines) and lines[idx].indent == virtual_indent and not lines[idx].is_dash:
+            key2, rest2 = _yaml_require_key(lines[idx].content)
+            idx += 1
+            if rest2.strip() == "":
+                value2, idx = _yaml_parse_value(lines, idx, virtual_indent)
+            else:
+                value2 = _yaml_validate_scalar(rest2)
+            mapping[key2] = value2
+
+        items.append(mapping)
+
+    return items, idx
+
+
+def _yaml_parse_mapping(lines: list[_YamlLine], idx: int, indent: int):
+    result: dict = {}
+    while idx < len(lines) and lines[idx].indent == indent and not lines[idx].is_dash:
+        key, rest = _yaml_require_key(lines[idx].content)
+        idx += 1
+        if rest.strip() == "":
+            value, idx = _yaml_parse_value(lines, idx, indent)
+        else:
+            value = _yaml_validate_scalar(rest)
+        result[key] = value
+    return result, idx
+
+
+def _yaml_safe_load(path: str) -> object:
+    if _pyyaml is not None:
+        with open(path, encoding="utf-8") as file:
+            try:
+                return _pyyaml.safe_load(file)
+            except _pyyaml.YAMLError as e:
+                raise _YamlError(str(e)) from e
+
     with open(path, encoding="utf-8") as file:
-        lines = file.read().splitlines()
-    return _get_top_level_keys(lines, path)
+        text = file.read()
+
+    lines = _yaml_prepare_lines(text)
+    if not lines:
+        return None
+
+    value, idx = _yaml_parse_node(lines, 0, 0)
+    if idx != len(lines):
+        raise _YamlError(f"unexpected content at: {lines[idx].content!r}")
+    return value
 
 
-def _solver_config_has_entry(lines: list[str], start: int, end: int, name: str) -> bool:
-    entries = lines[start:end]
-    dash_indent = _get_entry_indent(entries)
+def _load_config(path: str) -> dict:
+    try:
+        config = _yaml_safe_load(path)
+    except _YamlError as e:
+        print(f"`{path}` is not a valid YAML file. Here is the error: {e}")
+        raise SystemExit(1) from e
 
-    if dash_indent is not None:
-        for entry in entries:
-            if not entry.startswith(dash_indent) or not entry[len(dash_indent) :].startswith("-"):
-                continue
-            match = _ENTRY_KEY_RE.match(entry[len(dash_indent) + 1 :])
-            if match and match.group(1) == name:
-                return True
-        return False
+    if config is None:
+        return {}
 
-    base_indent: Optional[str] = None
-    for entry in entries:
-        stripped = entry.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        indent = entry[: len(entry) - len(entry.lstrip(" "))]
-        if base_indent is None:
-            base_indent = indent
-        if indent != base_indent:
-            continue
-        match = _ENTRY_KEY_RE.match(entry[len(base_indent) :])
-        if match and match.group(1) == name:
-            return True
-    return False
+    if not isinstance(config, dict):
+        print(
+            f"`{path}` must map configuration sections such as "
+            f"`{SOLVER_CONFIG_SECTION}` to their entries."
+        )
+        raise SystemExit(1)
+
+    return config
 
 
 def _find_section(lines: list[str], section: str, path: str) -> int | None:
@@ -372,7 +598,7 @@ def _reindent(entries: list[str], indent: str) -> list[str]:
 
 def _get_solver_config(gams_dir: str) -> list[str]:
     path = os.path.join(gams_dir, CUOPT_CONFIG_FILE)
-    if _load_top_level_keys(path) != [SOLVER_CONFIG_SECTION]:
+    if list(_load_config(path)) != [SOLVER_CONFIG_SECTION]:
         print(
             f"`{path}` of the release archive holds more than a "
             f"`{SOLVER_CONFIG_SECTION}` section, which cannot be merged into "
@@ -430,14 +656,13 @@ def _merge_cuopt_config(gams_dir: str) -> None:
         config_path = os.path.join(gams_dir, CONFIG_FILE)
 
         if os.path.isfile(config_path):
+            config = _load_config(config_path)
+            solver_config = config.get(SOLVER_CONFIG_SECTION)
             has_cuopt = False
-            if SOLVER_CONFIG_SECTION in _load_top_level_keys(config_path):
-                with open(config_path, encoding="utf-8") as file:
-                    existing_lines = file.read().splitlines()
-                index = _find_section(existing_lines, SOLVER_CONFIG_SECTION, config_path)
-                if index is not None:
-                    end = _get_section_end(existing_lines, index + 1)
-                    has_cuopt = _solver_config_has_entry(existing_lines, index + 1, end, SOLVER_NAME)
+            if isinstance(solver_config, list):
+                has_cuopt = any(isinstance(item, dict) and SOLVER_NAME in item for item in solver_config)
+            elif isinstance(solver_config, dict):
+                has_cuopt = SOLVER_NAME in solver_config
 
             if has_cuopt:
                 print(f"`{SOLVER_NAME}` entry already exists in `{CONFIG_FILE}`. Skipping merge.")
