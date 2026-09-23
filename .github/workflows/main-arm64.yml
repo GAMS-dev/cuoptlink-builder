@@ -23,14 +23,18 @@ jobs:
           apt-get update && apt-get install -y patchelf curl unzip zip gcc
           pip install uv
 
-      # Get CUDA runtimes via pip
+      # Get CUDA runtimes via pip (nightly wheels, needed for pre-release multi-GPU PDLP support)
       - name: Set up python virtual environments with NVIDIA dependencies for CUDA 12 and CUDA 13 (respectively)
         run: |
           mkdir -p venvs
           uv venv venvs/cu12
-          uv pip install --python venvs/cu12 --extra-index-url=https://pypi.nvidia.com 'cuopt-cu12==26.8.*' -qq
+          uv pip install --python venvs/cu12 --pre \
+            --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ \
+            'cuopt-cu12==26.10.*,>=0.0.0a0' -qq
           uv venv venvs/cu13
-          uv pip install --python venvs/cu13 --extra-index-url=https://pypi.nvidia.com 'cuopt-cu13==26.8.*' -qq
+          uv pip install --python venvs/cu13 --pre \
+            --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ \
+            'cuopt-cu13==26.10.*,>=0.0.0a0' -qq
 
       # Get GAMS (ARM64 version)
       - name: Download and extract latest GAMS distribution
