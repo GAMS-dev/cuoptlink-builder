@@ -977,10 +977,13 @@ int main(int argc, char *argv[])
         goto DONE;
       }
       gmoSetHeadnTail(gmo, gmoTmipbest, solution_bound);
+#if defined(GMOAPIVERSION) && GMOAPIVERSION >= 30
+      // gap tail records were introduced with GMO API version 30
       cuopt_float_t mip_gap;
       if (cuOptGetMIPGap(solution, &mip_gap) == CUOPT_SUCCESS)
         gmoSetHeadnTail(gmo, gmoTrelgap, mip_gap);
       gmoSetHeadnTail(gmo, gmoTabsgap, objective_value > solution_bound ? objective_value - solution_bound : solution_bound - objective_value);
+#endif
     }
 
     status = cuOptGetPrimalSolution(solution, objective_coefficients); // reuse n-vector
