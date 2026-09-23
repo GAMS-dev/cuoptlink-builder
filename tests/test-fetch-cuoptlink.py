@@ -37,7 +37,7 @@ fc = _load_module()
 
 CUOPT_RELEASE_YAML = """solverConfig:
   - cuopt:
-      minVersion: 49
+      minVersion: 54
       fileType: 1001
       dictType: 0
       licCodes: 000102030405

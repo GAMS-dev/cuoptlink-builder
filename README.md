@@ -12,7 +12,7 @@ Supported model types are LP, MIP, RMIP, QCP, RMIQCP. QCP and RMIQCP models must
 
 - **Operating System:** Linux, Windows 11 through WSL2
 - **CPU architecture:** x86_64, arm64
-- **GAMS:** Version 49 or newer
+- **GAMS:** Version 54 or newer
 - **GAMSPy:** Version 1.12.1 or newer
 - **NVIDIA GPU:** Volta architecture or better
 - **CUDA Runtime Libraries:** 12 or 13
