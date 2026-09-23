@@ -48,7 +48,6 @@ CUOPT_RELEASE_YAML = """solverConfig:
         - RMIP
         - MIP
         - QCP
-        - MIQCP
         - RMIQCP
 """
 

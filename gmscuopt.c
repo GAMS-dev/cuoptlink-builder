@@ -6,12 +6,13 @@
 #include <strings.h>
 #include <errno.h>
 #include <ctype.h>
+#include <math.h>
 #include "gmomcc.h"
 #include "gevmcc.h"
 #include "optcc.h"
 #include <cuopt/mathematical_optimization/cuopt_c.h>
 
-int 
+int
 printOut (gevHandle_t gev, char *fmt, ...)
 {
   va_list argp;
@@ -21,7 +22,7 @@ printOut (gevHandle_t gev, char *fmt, ...)
   va_start (argp, fmt);
   rc = vsnprintf(msg, sizeof(msg), fmt, argp);
   va_end(argp);
-  gevLogStatPChar(gev, msg);
+    gevLogStatPChar(gev, msg);
   return rc;
 }
 
@@ -74,6 +75,18 @@ int main(int argc, char *argv[])
 #if defined(CUOPT_VERSION) && defined(CUOPT_HASH)
   printOut(gev, "GAMS/cuOpt link was built against cuOpt version: %s, git hash: %s\n", CUOPT_VERSION, CUOPT_HASH);
 #endif
+  {
+    cuopt_int_t vmajor = 0, vminor = 0, vpatch = 0;
+    if (cuOptGetVersion(&vmajor, &vminor, &vpatch) == CUOPT_SUCCESS) {
+      printOut(gev, "Using cuOpt library version: %d.%02d.%02d\n", vmajor, vminor, vpatch);
+#if defined(CUOPT_VERSION)
+      int bmajor = -1, bminor = -1;
+      if (sscanf(CUOPT_VERSION, "%d.%d", &bmajor, &bminor) == 2 && (bmajor != vmajor || bminor != vminor))
+        printOut(gev, "WARNING: cuOpt library version %d.%02d differs from the version %s the link was built against!\n",
+                 vmajor, vminor, CUOPT_VERSION);
+#endif
+    }
+  }
 
   status = gmoRegisterEnvironment(gmo, gev, msg);
   if (status) {
@@ -83,7 +96,7 @@ int main(int argc, char *argv[])
 
   status = gmoLoadDataLegacy(gmo, msg);
   if (status) {
-    printOut(gev, "Could not register GEV: %s\n", msg);
+    printOut(gev, "Could not load model data: %s\n", msg);
     goto GAMSDONE;
   }
 
@@ -128,8 +141,10 @@ int main(int argc, char *argv[])
   gmoSolveStatSet(gmo, gmoSolveStat_Capability);
   gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
 
-  /* Activate Q-mode for QCP and MIQCP models */
-  if (gmoModelType(gmo) == gmoProc_qcp || gmoModelType(gmo) == gmoProc_miqcp)
+  /* Activate Q-mode for QCP, RMIQCP and MIQCP models */
+  int is_qcp = (gmoModelType(gmo) == gmoProc_qcp || gmoModelType(gmo) == gmoProc_rmiqcp ||
+                gmoModelType(gmo) == gmoProc_miqcp);
+  if (is_qcp)
     gmoUseQSet(gmo, 1);
 
   cuOptOptimizationProblem problem = NULL;
@@ -153,10 +168,13 @@ int main(int argc, char *argv[])
 
   // QCP specific mapping arrays
   int *gams2cuopt_row = NULL;
+  int *row_qnz = NULL; // number of Q nonzeros per GAMS row (0 for linear rows)
   cuopt_float_t *orig_rhs = NULL;
   char *orig_sense = NULL;
 
   int has_integer_vars = 0;
+  int num_quad_constraints = 0;
+  int obj_qnz = 0;
   fln_mip_trace[0] = '\0';
   sl_state_t context;
   int mipstart = 0;
@@ -182,7 +200,7 @@ int main(int argc, char *argv[])
       }
     }
     else
-      printOut(gev, "WARNING: Enabling a MIP trace is only allowed for model type MIP/MIQCP!\n");
+      printOut(gev, "WARNING: Enabling a MIP trace is only allowed for model type MIP!\n");
   }
   if (fp_mip_trace)
   {
@@ -192,7 +210,7 @@ int main(int argc, char *argv[])
     mip_trace_line('S', 0, 0, 0, GMS_SV_NA, GMS_SV_NA);
     status = cuOptSetMIPGetSolutionCallback(settings, mip_get_solution_cb, &context);
     if (status != CUOPT_SUCCESS) {
-      printOut(gev, "Error setting get-solution callback\n", status);
+      printOut(gev, "Error setting get-solution callback: %d\n", status);
       goto DONE;
     }
   }
@@ -201,7 +219,7 @@ int main(int argc, char *argv[])
   mipstart = optGetIntStr(opt, "mipstart");
   if (mipstart && (gmoModelType(gmo) != gmoProc_mip && gmoModelType(gmo) != gmoProc_miqcp))
   {
-    printOut(gev, "WARNING: Setting a MIP start is only allowed for model type MIP/MIQCP!\n");
+    printOut(gev, "WARNING: Setting a MIP start is only allowed for model type MIP!\n");
     mipstart = 0;
   }
   if (mipstart && optGetDefinedStr(opt, "prob_read"))
@@ -211,9 +229,11 @@ int main(int argc, char *argv[])
   }
 
   // Set solver parameters with GAMS options
+  // gevThreads resolves non-positive GAMS Threads values (e.g. -2 = all but two cores),
+  // which cuOpt's num_cpu_threads (>= -1) would reject.
   if (gevGetIntOpt(gev, gevThreadsRaw) != 0)
   {
-    status = cuOptSetIntegerParameter(settings, CUOPT_NUM_CPU_THREADS, gevGetIntOpt(gev, gevThreadsRaw));
+    status = cuOptSetIntegerParameter(settings, CUOPT_NUM_CPU_THREADS, gevThreads(gev));
     if (status != CUOPT_SUCCESS) {
       printOut(gev, "Error setting number of CPU threads: %d\n", status);
       goto DONE;
@@ -240,7 +260,14 @@ int main(int argc, char *argv[])
       printOut(gev, "Error setting absolute gap: %d\n", status);
       goto DONE;
     }
-    status = cuOptSetFloatParameter(settings, CUOPT_MIP_RELATIVE_GAP, gevGetDblOpt(gev, gevOptCR));
+    // cuOpt only accepts mip_relative_gap in [0, 0.1]
+    double optcr = gevGetDblOpt(gev, gevOptCR);
+    if (optcr > 0.1)
+    {
+      printOut(gev, "WARNING: cuOpt supports a relative gap of at most 0.1. Reducing OptCR from %g to 0.1.\n", optcr);
+      optcr = 0.1;
+    }
+    status = cuOptSetFloatParameter(settings, CUOPT_MIP_RELATIVE_GAP, optcr);
     if (status != CUOPT_SUCCESS) {
       printOut(gev, "Error setting relative gap: %d\n", status);
       goto DONE;
@@ -258,11 +285,6 @@ int main(int argc, char *argv[])
     optGetValuesNr(opt, i, optname, &ival, &dval, sval);
 
     if (data_type == optDataInteger) {
-      if (strcasecmp(optname, "solve_by_pdlp") == 0 || strcasecmp(optname, "solve-by-pdlp") == 0)
-      {
-        printOut(gev, "WARNING: Parameter 'solve-by-pdlp' was removed in cuOpt 26.08. Ignoring option.\n");
-        continue;
-      }
       status = cuOptSetIntegerParameter(settings, optname, ival);
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error setting integer option >%s<: %d\n", optname, status);
@@ -272,6 +294,12 @@ int main(int argc, char *argv[])
       status = cuOptSetFloatParameter(settings, optname, dval);
       if (status != CUOPT_SUCCESS) {
         printOut(gev, "Error setting float option >%s<: %d\n", optname, status);
+        goto DONE;
+      }
+    } else if(data_type == optDataString) {
+      status = cuOptSetParameter(settings, optname, sval);
+      if (status != CUOPT_SUCCESS) {
+        printOut(gev, "Error setting string option >%s<: %d\n", optname, status);
         goto DONE;
       }
     }
@@ -295,19 +323,10 @@ int main(int argc, char *argv[])
       double *marginals = (double *)malloc(sizeof(double) * nconstraints);
       gmoGetVarL(gmo, lvls);
       gmoGetEquM(gmo, marginals);
+      cuopt_int_t pstatus, dstatus;
 #if CUOPT_INSTANTIATE_DOUBLE
-      status = cuOptSetInitialPrimalSolution(settings, lvls, nvars);
-      if (status != CUOPT_SUCCESS)
-      {
-        printOut(gev, "Error setting primal solution for LP.\n");
-        goto DONE;
-      }
-      status = cuOptSetInitialDualSolution(settings, marginals, nconstraints);
-      if (status != CUOPT_SUCCESS)
-      {
-        printOut(gev, "Error setting dual solution for LP.\n");
-        goto DONE;
-      }
+      pstatus = cuOptSetInitialPrimalSolution(settings, lvls, nvars);
+      dstatus = cuOptSetInitialDualSolution(settings, marginals, nconstraints);
 #else
       cuopt_float_t *lvlsf = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nvars);
       cuopt_float_t *marginalsf = (cuopt_float_t *)malloc(sizeof(cuopt_float_t) * nconstraints);
@@ -315,32 +334,25 @@ int main(int argc, char *argv[])
         lvlsf[i] = (cuopt_float_t)lvls[i];
       for (int i = 0; i < nconstraints; i++)
         marginalsf[i] = (cuopt_float_t)marginals[i];
-      status = cuOptSetInitialPrimalSolution(settings, lvlsf, nvars);
-      if (status != CUOPT_SUCCESS)
-      {
-        printOut(gev, "Error setting primal solution for LP.\n");
-        goto DONE;
-      }
-      status = cuOptSetInitialDualSolution(settings, marginalsf, nconstraints);
-      if (status != CUOPT_SUCCESS)
-      {
-        printOut(gev, "Error setting dual solution for LP.\n");
-        goto DONE;
-      }
+      pstatus = cuOptSetInitialPrimalSolution(settings, lvlsf, nvars);
+      dstatus = cuOptSetInitialDualSolution(settings, marginalsf, nconstraints);
       free(lvlsf);
       free(marginalsf);
 #endif
       free(lvls);
       free(marginals);
+      if (pstatus != CUOPT_SUCCESS || dstatus != CUOPT_SUCCESS)
+      {
+        printOut(gev, "Error setting %s solution for LP.\n", pstatus != CUOPT_SUCCESS ? "primal" : "dual");
+        goto DONE;
+      }
       printOut(gev, "Initial primal and dual solutions have been set.\n");
     }
   }
 
   if (!optGetDefinedStr(opt, "prob_read"))
   {
-    int is_qcp = (gmoModelType(gmo) == gmoProc_qcp || gmoModelType(gmo) == gmoProc_miqcp);
     int num_linear_constraints = 0;
-    int num_quad_constraints = 0;
 
     // cuOpt has no notion of SOS1/SOS2 sets or semi-integer variables. Reject such
     // models explicitly instead of silently feeding the solver an incomplete/undefined
@@ -351,50 +363,69 @@ int main(int argc, char *argv[])
       printOut(gev, "ERROR: cuOpt does not support SOS1, SOS2, or semi-integer variables.\n");
       gmoSolveStatSet(gmo, gmoSolveStat_Capability);
       gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
-      goto DONE;
+      goto UNLOAD;
+    }
+
+    // cuOpt has no conic (=C=), external (=X=) or logic (=B=) constraints
+    if (gmoGetEquTypeCnt(gmo, gmoequ_C) || gmoGetEquTypeCnt(gmo, gmoequ_X) || gmoGetEquTypeCnt(gmo, gmoequ_B))
+    {
+      printOut(gev, "ERROR: cuOpt does not support conic (=C=), external (=X=), or logic (=B=) equations.\n");
+      gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+      gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+      goto UNLOAD;
+    }
+
+    // cuOpt uses 32-bit indices
+    if (gmoNZ64(gmo) > INT32_MAX || (is_qcp && gmoMaxQNZ64(gmo) > INT32_MAX))
+    {
+      printOut(gev, "ERROR: cuOpt does not support models with more than 2^31 (quadratic) nonzeros.\n");
+      gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+      gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+      goto UNLOAD;
     }
 
     gams2cuopt_row = malloc(num_constraints * sizeof(int));
+    row_qnz = calloc(num_constraints > 0 ? num_constraints : 1, sizeof(int));
     orig_rhs = malloc(num_constraints * sizeof(cuopt_float_t));
     orig_sense = malloc(num_constraints * sizeof(char));
 
-    // First pass: Count linear vs quadratic and build index mapping
-    for (int i = 0; i < num_constraints; i++)
+    // Classify rows (linear, quadratic, general nonlinear) as GMO sees them in Q-mode.
+    // cuOpt can only take linear and quadratic rows and objectives.
+    if (is_qcp)
     {
-      int qnz = 0;
-      if (is_qcp)
+      if (gmoGetObjOrder(gmo) == gmoorder_NL)
       {
-        qnz = gmoGetRowQNZOne(gmo, i);
-        if (qnz < 0)
-          qnz = 0; // clamp -1 to 0
+        printOut(gev, "ERROR: The objective is not quadratic (or the quadratic information could not be extracted).\n");
+        gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+        gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+        goto UNLOAD;
       }
-
-      if (qnz == 0)
+      for (int i = 0; i < num_constraints; i++)
       {
-        gams2cuopt_row[i] = num_linear_constraints++;
-      }
-      else
-      {
-        num_quad_constraints++;
+        int order = gmoGetEquOrderOne(gmo, i);
+        if (order == gmoorder_Q)
+          row_qnz[i] = gmoGetRowQNZOne(gmo, i);
+        if (order == gmoorder_NL || order == gmoorder_ERR || row_qnz[i] < 0)
+        {
+          printOut(gev, "ERROR: Row %d is not quadratic (or the quadratic information could not be extracted).\n", i + 1);
+          gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+          gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+          goto UNLOAD;
+        }
       }
     }
 
-    // Append quadratic constraint indices sequentially
+    // Linear rows first (in GAMS order), then the quadratic rows
+    for (int i = 0; i < num_constraints; i++)
+      if (row_qnz[i] == 0)
+        gams2cuopt_row[i] = num_linear_constraints++;
     int q_idx = num_linear_constraints;
     for (int i = 0; i < num_constraints; i++)
-    {
-      int qnz = 0;
-      if (is_qcp)
-      {
-        qnz = gmoGetRowQNZOne(gmo, i);
-        if (qnz < 0)
-          qnz = 0; // clamp -1 to 0
-      }
-      if (qnz > 0)
+      if (row_qnz[i] > 0)
       {
         gams2cuopt_row[i] = q_idx++;
+        num_quad_constraints++;
       }
-    }
 
     constraint_matrix_row_offsets = malloc((num_linear_constraints + 1) * sizeof(cuopt_int_t));
     constraint_matrix_column_indices = malloc(nnz * sizeof(cuopt_int_t));
@@ -442,10 +473,11 @@ int main(int argc, char *argv[])
         orig_sense[i] = CUOPT_GREATER_THAN;
         break;
       default:
-        printOut(gev, "ERROR: Unsupported row type %d for row %d.\n", temp_equ_types[i], i);
-        orig_sense[i] = CUOPT_EQUAL; // avoid passing an uninitialized value to cuOpt
+        printOut(gev, "ERROR: Unsupported row type %d for row %d.\n", temp_equ_types[i], i + 1);
         free(temp_equ_types);
-        goto DONE;
+        gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+        gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+        goto UNLOAD;
       }
     }
     free(temp_equ_types);
@@ -485,6 +517,28 @@ int main(int argc, char *argv[])
     }
     free(temp_var_types);
 
+    // cuOpt's MIP solver ignores quadratic objective terms and quadratic constraints
+    // (or fails in presolve), so discrete quadratic models must be rejected.
+    if (is_qcp)
+      obj_qnz = gmoObjQMatNZ(gmo);
+    if (has_integer_vars && (num_quad_constraints > 0 || obj_qnz > 0))
+    {
+      printOut(gev, "ERROR: cuOpt does not support quadratic models with discrete variables (MIQCP/MIQP).\n");
+      gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+      gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+      goto UNLOAD;
+    }
+
+    // requestMarginals=2: marginals are demanded, so fail upfront if cuOpt cannot provide them
+    if (gevGetIntOpt(gev, gevRequestMarginals) == 2 && (has_integer_vars || num_quad_constraints > 0))
+    {
+      printOut(gev, "ERROR: Marginals are demanded (requestMarginals=2), but cuOpt does not provide them for %s.\n",
+               has_integer_vars ? "models with discrete variables" : "models with quadratic constraints");
+      gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+      gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+      goto UNLOAD;
+    }
+
     status = gmoGetVarLower(gmo, lower_bounds);
     if (status)
     {
@@ -510,13 +564,7 @@ int main(int argc, char *argv[])
     int lin_row = 0;
     for (int i = 0; i < num_constraints; i++)
     {
-      int qnz = 0;
-      if (is_qcp)
-      {
-        qnz = gmoGetRowQNZOne(gmo, i);
-        if (qnz < 0)
-          qnz = 0; // clamp -1 to 0
-      }
+      int qnz = row_qnz[i];
 
       // Pack ONLY purely linear constraints
       if (qnz == 0)
@@ -569,7 +617,6 @@ int main(int argc, char *argv[])
 
     if (is_qcp)
     {
-      int obj_qnz = gmoObjQNZ(gmo);
       if (obj_qnz > 0)
       {
         int *temp_q_row = malloc(obj_qnz * sizeof(int));
@@ -577,7 +624,7 @@ int main(int argc, char *argv[])
         double *temp_q_coef = malloc(obj_qnz * sizeof(double));
 
         // Extract the quadratic objective coefficients from GAMS
-        gmoGetObjQ(gmo, temp_q_row, temp_q_col, temp_q_coef);
+        gmoGetObjQMat(gmo, temp_q_row, temp_q_col, temp_q_coef);
 
         cuopt_int_t *q_row = malloc(obj_qnz * sizeof(cuopt_int_t));
         cuopt_int_t *q_col = malloc(obj_qnz * sizeof(cuopt_int_t));
@@ -617,16 +664,27 @@ int main(int argc, char *argv[])
     // Append the quadratic constraints dynamically
     for (int i = 0; i < num_constraints; i++)
     {
-      int qnz = 0;
-      if (is_qcp)
-      {
-        qnz = gmoGetRowQNZOne(gmo, i);
-        if (qnz < 0)
-          qnz = 0; // clamp -1 to 0
-      }
+      int qnz = row_qnz[i];
 
       if (qnz > 0)
       {
+        // cuOpt only supports convex quadratic constraints of type <= or >=
+        if (orig_sense[i] == CUOPT_EQUAL)
+        {
+          char rowname[GMS_SSSIZE];
+          if (gmoDictionary(gmo))
+            gmoGetEquNameOne(gmo, i, rowname);
+          else
+            snprintf(rowname, sizeof(rowname), "%d", i + 1);
+          printOut(gev, "ERROR: cuOpt does not support quadratic equality constraints (row %s).\n", rowname);
+          if (!gmoObjReform(gmo))
+            printOut(gev, "       Note: the objective variable could not be eliminated (e.g. because it has bounds or "
+                     "appears in other equations), so a quadratic objective definition is kept as an equation.\n");
+          gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+          gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+          goto UNLOAD;
+        }
+
         int lin_nz = 0, rnlnz = 0, gstatus;
         int *temp_lin_cols = malloc(num_variables * sizeof(int));
         double *temp_lin_vals = malloc(num_variables * sizeof(double));
@@ -650,10 +708,10 @@ int main(int argc, char *argv[])
         int *temp_q_row = malloc(qnz * sizeof(int));
         int *temp_q_col = malloc(qnz * sizeof(int));
         double *temp_q_coef = malloc(qnz * sizeof(double));
-        gstatus = gmoGetRowQ(gmo, i, temp_q_row, temp_q_col, temp_q_coef);
+        gstatus = gmoGetRowQMat(gmo, i, temp_q_row, temp_q_col, temp_q_coef);
         if (gstatus)
         {
-          printOut(gev, "gmoGetRowQ %d failed. Status: %d\n", i, gstatus);
+          printOut(gev, "gmoGetRowQMat %d failed. Status: %d\n", i, gstatus);
           free(temp_lin_cols);
           free(temp_lin_vals);
           free(lin_cols);
@@ -733,24 +791,19 @@ int main(int argc, char *argv[])
     gmoGetVarL(gmo, initial_levels);
 #if CUOPT_INSTANTIATE_DOUBLE
     status = cuOptAddMIPStart(settings, initial_levels, gmoN(gmo));
-    if (status != CUOPT_SUCCESS)
-    {
-      printOut(gev, "Error setting MIP start.\n");
-      goto DONE;
-    }
 #else
     cuopt_float_t *initial_levelsf = malloc(sizeof(cuopt_float_t) * gmoN(gmo));
     for (int i = 0; i < gmoN(gmo); i++)
       initial_levelsf[i] = (cuopt_float_t)initial_levels[i];
     status = cuOptAddMIPStart(settings, initial_levelsf, gmoN(gmo));
+    free(initial_levelsf);
+#endif
+    free(initial_levels);
     if (status != CUOPT_SUCCESS)
     {
       printOut(gev, "Error setting MIP start.\n");
       goto DONE;
     }
-    free(initial_levelsf);
-#endif
-    free(initial_levels);
     printOut(gev, "MIP start has been set.\n");
   }
 
@@ -758,8 +811,18 @@ int main(int argc, char *argv[])
   // Solve the problem
   status = cuOptSolve(problem, settings, &solution);
   if (status != CUOPT_SUCCESS) {
-    printOut(gev, "Error solving problem: %d\n", status);
-    goto DONE;
+    char errmsg[1024] = "";
+    if (solution)
+      cuOptGetErrorString(solution, errmsg, sizeof(errmsg));
+    printOut(gev, "Error solving problem (cuOpt status %d): %s\n", status, errmsg);
+    if (status == CUOPT_VALIDATION_ERROR) {
+      gmoSolveStatSet(gmo, gmoSolveStat_Capability);
+      gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+    } else {
+      gmoSolveStatSet(gmo, gmoSolveStat_SolverErr);
+      gmoModelStatSet(gmo, gmoModelStat_ErrorNoSolution);
+    }
+    goto UNLOAD;
   }
 
   if (loglevel == 2) { // sorry no cuOpt log for logOption=4 in the log file
@@ -778,56 +841,12 @@ int main(int argc, char *argv[])
   // Get solution information
   cuopt_float_t solution_time;
   cuopt_int_t termination_status;
-  cuopt_float_t objective_value, solution_bound;
+  cuopt_float_t objective_value, solution_bound = GMS_SV_NA;
 
   status = cuOptGetTerminationStatus(solution, &termination_status);
   if (status != CUOPT_SUCCESS) {
     printOut(gev, "Error getting termination status: %d\n", status);    
     goto DONE;
-  }
-
-  gmoSolveStatSet(gmo, gmoSolveStat_Normal);
-  gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
-  if (!optGetDefinedStr(opt, "prob_read")) {
-    switch (termination_status) {
-    case CUOPT_TERMINATION_STATUS_OPTIMAL:
-      gmoModelStatSet(gmo, gmoModelStat_OptimalGlobal);
-      break;
-    case CUOPT_TERMINATION_STATUS_INFEASIBLE:
-      gmoModelStatSet(gmo, gmoModelStat_InfeasibleGlobal);
-      break;
-    case CUOPT_TERMINATION_STATUS_UNBOUNDED:
-      gmoModelStatSet(gmo, gmoModelStat_Unbounded);
-      break;
-    case CUOPT_TERMINATION_STATUS_ITERATION_LIMIT:
-      gmoSolveStatSet(gmo, gmoSolveStat_Iteration);
-      break;
-    case CUOPT_TERMINATION_STATUS_TIME_LIMIT:
-      gmoSolveStatSet(gmo, gmoSolveStat_Resource);
-      break;
-    case CUOPT_TERMINATION_STATUS_NUMERICAL_ERROR:
-      gmoSolveStatSet(gmo, gmoSolveStat_SolverErr);
-      break;
-    case CUOPT_TERMINATION_STATUS_PRIMAL_FEASIBLE:
-      if ((gmoModelType(gmo) == gmoProc_mip || gmoModelType(gmo) == gmoProc_miqcp) && has_integer_vars)
-      {
-        gmoModelStatSet(gmo, gmoModelStat_Integer);
-        } else {
-        gmoModelStatSet(gmo, gmoModelStat_Feasible);
-      }
-      break;
-    case CUOPT_TERMINATION_STATUS_FEASIBLE_FOUND:
-      if ((gmoModelType(gmo) == gmoProc_mip || gmoModelType(gmo) == gmoProc_miqcp) && has_integer_vars)
-      {
-        gmoModelStatSet(gmo, gmoModelStat_Integer);
-        } else {
-        gmoModelStatSet(gmo, gmoModelStat_Feasible);
-      }
-      break;
-    case CUOPT_TERMINATION_STATUS_UNBOUNDED_OR_INFEASIBLE:
-    default:
-      gmoSolveStatSet(gmo, gmoSolveStat_Solver);
-    }
   }
 
   status = cuOptGetSolveTime(solution, &solution_time);
@@ -837,7 +856,112 @@ int main(int argc, char *argv[])
   }
   gmoSetHeadnTail(gmo, gmoHresused, solution_time);
 
-  if (gmoModelStat(gmo) != gmoModelStat_NoSolutionReturned) {
+  int is_mip = has_integer_vars && (gmoModelType(gmo) == gmoProc_mip || gmoModelType(gmo) == gmoProc_miqcp);
+  int have_solution = 0;
+  int limit_point = 0; // continuous model stopped by an iteration/time limit
+  gmoSolveStatSet(gmo, gmoSolveStat_Normal);
+  gmoModelStatSet(gmo, gmoModelStat_NoSolutionReturned);
+  if (!optGetDefinedStr(opt, "prob_read")) {
+    switch (termination_status) {
+    case CUOPT_TERMINATION_STATUS_OPTIMAL:
+      gmoModelStatSet(gmo, gmoModelStat_OptimalGlobal);
+      have_solution = 1;
+      break;
+    // For infeasible/unbounded problems cuOpt returns no (or an empty) primal solution
+    case CUOPT_TERMINATION_STATUS_INFEASIBLE:
+      gmoModelStatSet(gmo, is_mip ? gmoModelStat_IntegerInfeasible : gmoModelStat_InfeasibleNoSolution);
+      break;
+    case CUOPT_TERMINATION_STATUS_UNBOUNDED:
+      gmoModelStatSet(gmo, gmoModelStat_UnboundedNoSolution);
+      break;
+    case CUOPT_TERMINATION_STATUS_UNBOUNDED_OR_INFEASIBLE:
+      printOut(gev, "cuOpt proved the model to be infeasible or unbounded.\n");
+      gmoModelStatSet(gmo, gmoModelStat_InfeasibleNoSolution);
+      break;
+    case CUOPT_TERMINATION_STATUS_ITERATION_LIMIT:
+      gmoSolveStatSet(gmo, gmoSolveStat_Iteration);
+      limit_point = 1;
+      break;
+    case CUOPT_TERMINATION_STATUS_TIME_LIMIT:
+      gmoSolveStatSet(gmo, gmoSolveStat_Resource);
+      limit_point = 1;
+      break;
+    case CUOPT_TERMINATION_STATUS_WORK_LIMIT:
+      gmoSolveStatSet(gmo, gmoSolveStat_Resource);
+      break;
+    case CUOPT_TERMINATION_STATUS_NUMERICAL_ERROR:
+      gmoSolveStatSet(gmo, gmoSolveStat_SolverErr);
+      break;
+    case CUOPT_TERMINATION_STATUS_PRIMAL_FEASIBLE:
+      gmoModelStatSet(gmo, is_mip ? gmoModelStat_Integer : gmoModelStat_Feasible);
+      have_solution = 1;
+      break;
+    case CUOPT_TERMINATION_STATUS_FEASIBLE_FOUND:
+      gmoModelStatSet(gmo, is_mip ? gmoModelStat_Integer : gmoModelStat_Feasible);
+      have_solution = 1;
+      if (is_mip)
+      {
+        // cuOpt reports FeasibleFound (not a limit status) when the MIP stops with an incumbent
+        // before the gap tolerances are met, so figure out which limit was hit.
+        cuopt_float_t time_limit = CUOPT_INFINITY, work_limit = CUOPT_INFINITY;
+        cuopt_int_t node_limit = 0;
+        cuOptGetFloatParameter(settings, CUOPT_TIME_LIMIT, &time_limit);
+        cuOptGetFloatParameter(settings, CUOPT_WORK_LIMIT, &work_limit);
+        cuOptGetIntegerParameter(settings, CUOPT_NODE_LIMIT, &node_limit);
+        // cuOpt does not expose the work units spent, so a set work limit is assumed to be the cause
+        if (solution_time >= 0.99 * time_limit || work_limit < 1e10)
+          gmoSolveStatSet(gmo, gmoSolveStat_Resource);
+        else if (node_limit < INT32_MAX)
+          gmoSolveStatSet(gmo, gmoSolveStat_Iteration);
+        else
+          gmoSolveStatSet(gmo, gmoSolveStat_Solver);
+      }
+      break;
+    case CUOPT_TERMINATION_STATUS_CONCURRENT_LIMIT:
+    default:
+      gmoSolveStatSet(gmo, gmoSolveStat_Solver);
+    }
+
+    // A MIP stopped by a limit without incumbent has no point. For continuous models PDLP returns
+    // its current iterate (finite objective), while dual simplex and barrier return an all-zero
+    // placeholder with a NaN objective.
+    limit_point = limit_point && !has_integer_vars && num_quad_constraints == 0;
+    if (limit_point)
+    {
+      cuopt_float_t obj = NAN;
+      if (cuOptGetObjectiveValue(solution, &obj) != CUOPT_SUCCESS || !isfinite(obj))
+        limit_point = 0;
+    }
+    if (limit_point)
+    {
+      // Classify the iterate as feasible (7) or intermediate infeasible (6) by checking each row
+      // against cuOpt's primal tolerances (PDLP projects the iterate onto the variable bounds).
+      cuopt_float_t abs_tol = 1e-4, rel_tol = 1e-4;
+      cuOptGetFloatParameter(settings, CUOPT_ABSOLUTE_PRIMAL_TOLERANCE, &abs_tol);
+      cuOptGetFloatParameter(settings, CUOPT_RELATIVE_PRIMAL_TOLERANCE, &rel_tol);
+      cuopt_float_t *x = malloc(num_variables * sizeof(cuopt_float_t));
+      int feasible = 0;
+      if (x && cuOptGetPrimalSolution(solution, x) == CUOPT_SUCCESS)
+      {
+        feasible = 1;
+        for (int r = 0; r < num_constraints && feasible; r++)
+        {
+          double act = 0.0;
+          for (int k = constraint_matrix_row_offsets[r]; k < constraint_matrix_row_offsets[r + 1]; k++)
+            act += constraint_matrix_coefficent_values[k] * x[constraint_matrix_column_indices[k]];
+          double tol = abs_tol + rel_tol * (rhs[r] < 0 ? -rhs[r] : rhs[r]);
+          if ((constraint_sense[r] != CUOPT_GREATER_THAN && act - rhs[r] > tol) ||
+              (constraint_sense[r] != CUOPT_LESS_THAN && rhs[r] - act > tol))
+            feasible = 0;
+        }
+      }
+      free(x);
+      gmoModelStatSet(gmo, feasible ? gmoModelStat_Feasible : gmoModelStat_InfeasibleIntermed);
+      have_solution = 1;
+    }
+  }
+
+  if (have_solution) {
     status = cuOptGetObjectiveValue(solution, &objective_value);
     if (status != CUOPT_SUCCESS) {
       printOut(gev, "Error getting objective value: %d\n", status);
@@ -853,6 +977,10 @@ int main(int argc, char *argv[])
         goto DONE;
       }
       gmoSetHeadnTail(gmo, gmoTmipbest, solution_bound);
+      cuopt_float_t mip_gap;
+      if (cuOptGetMIPGap(solution, &mip_gap) == CUOPT_SUCCESS)
+        gmoSetHeadnTail(gmo, gmoTrelgap, mip_gap);
+      gmoSetHeadnTail(gmo, gmoTabsgap, objective_value > solution_bound ? objective_value - solution_bound : solution_bound - objective_value);
     }
 
     status = cuOptGetPrimalSolution(solution, objective_coefficients); // reuse n-vector
@@ -860,7 +988,6 @@ int main(int argc, char *argv[])
       printOut(gev, "Error getting primal solution: %d\n", status);
       goto DONE;
     }
-    gmoSetVarL(gmo, objective_coefficients);
 
     if(fp_mip_trace)
     {
@@ -883,97 +1010,82 @@ int main(int argc, char *argv[])
       goto DONE;
     }
 
-    int is_mip_model = gmoModelType(gmo) == gmoProc_mip || has_integer_vars;
-    int is_linear_qcp = gmoModelType(gmo) == gmoProc_qcp && !has_integer_vars;
-
-    // Only extract duals, when it's neither MIP nor QCP (and marginals aren't explicitly NOT WANTED with requestMarginals=0)
-    if (!request_marginals)
+    // Marginals are only available for continuous models (LP, RMIP, QP) without quadratic
+    // constraints: cuOpt returns NaN duals for problems with quadratic constraints. Duals of an
+    // unfinished (limit) iterate are not meaningful, and presolve without dual postsolve drops them.
+    // cuOpt already returns duals in the GAMS sign convention (also for maximization problems).
+    int have_marginals = 0;
+    if (request_marginals && !limit_point && !has_integer_vars && num_quad_constraints == 0 &&
+        (!presolve || dual_postsolve))
     {
-      gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
-    }
-    // Linear/quadratic and fully continuous
-    else if ((gmoModelType(gmo) == gmoProc_lp || is_linear_qcp) && !is_mip_model)
-    {
-      if (!presolve || dual_postsolve)
+      cuopt_float_t *raw_duals = malloc(num_constraints * sizeof(cuopt_float_t));
+      double *final_duals = malloc(num_constraints * sizeof(double));
+      status = cuOptGetDualSolution(solution, raw_duals);
+      if (status != CUOPT_SUCCESS)
       {
-        status = cuOptGetReducedCosts(solution, objective_coefficients); // reuse n-vector
-        if (status != CUOPT_SUCCESS)
-        {
-          printOut(gev, "Error getting reduced cost: %d\n", status);
-          goto DONE;
-        }
-        // Only invert sign for linear maximization models;
-        // cuOpt 26.08+ handles quadratic maximization dual signs natively.
-        if (gmoSense(gmo) == gmoObj_Max && gmoModelType(gmo) == gmoProc_lp)
-        {
-          // patch duals for max problem
-          for (int j = 0; j < num_variables; j++)
-          {
-            objective_coefficients[j] *= -1.0;
-          }
-        }
-        gmoSetVarM(gmo, objective_coefficients);
-
-        // Extract duals using explicit mapping array
-        cuopt_float_t *raw_duals = malloc(num_constraints * sizeof(cuopt_float_t));
-        status = cuOptGetDualSolution(solution, raw_duals);
-        if (status != CUOPT_SUCCESS)
-        {
-          printOut(gev, "Error getting dual solution: %d\n", status);
-          free(raw_duals);
-          goto DONE;
-        }
-
-        double *final_duals = malloc(num_constraints * sizeof(double));
-        for (int i = 0; i < num_constraints; i++)
-        {
-          if (gams2cuopt_row)
-          {
-            final_duals[i] = raw_duals[gams2cuopt_row[i]];
-          }
-          else
-          {
-            final_duals[i] = raw_duals[i]; // Fallback if directly read from MPS
-          }
-
-          // Only invert sign for linear maximization models;
-          // cuOpt 26.08+ handles quadratic maximization dual signs natively.
-          if (gmoSense(gmo) == gmoObj_Max && gmoModelType(gmo) == gmoProc_lp)
-          {
-            final_duals[i] *= -1.0; // patch duals for max problem
-          }
-        }
-        gmoSetEquM(gmo, final_duals);
+        printOut(gev, "Error getting dual solution: %d\n", status);
         free(raw_duals);
         free(final_duals);
+        goto DONE;
+      }
+      for (int i = 0; i < num_constraints; i++)
+        final_duals[i] = gams2cuopt_row ? raw_duals[gams2cuopt_row[i]] : raw_duals[i];
+
+      cuopt_float_t *reduced_costs = malloc(num_variables * sizeof(cuopt_float_t));
+      if (obj_qnz == 0)
+      {
+        // cuOpt 26.08's PDLP returns all-zero reduced costs, so compute them for LPs from the
+        // duals as d = c - A^T y (exact for dual simplex and barrier as well). GMO's own
+        // computation (gmoSetSolution2) ignores c when the objective variable is eliminated.
+        status = gmoGetObjVector(gmo, reduced_costs, NULL);
+        for (int r = 0; r < num_constraints && !status; r++)
+          for (int k = constraint_matrix_row_offsets[r]; k < constraint_matrix_row_offsets[r + 1]; k++)
+            reduced_costs[constraint_matrix_column_indices[k]] -= constraint_matrix_coefficent_values[k] * raw_duals[r];
       }
       else
+        status = cuOptGetReducedCosts(solution, reduced_costs);
+      if (status)
       {
-        gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
+        printOut(gev, "Error getting reduced costs: %d\n", status);
+        free(raw_duals);
+        free(final_duals);
+        free(reduced_costs);
+        goto DONE;
       }
+
+      // Same as gmoSetSolution, but GMO computes the row levels itself
+      gmoSetVarL(gmo, objective_coefficients);
+      gmoSetEquM(gmo, final_duals);
+      gmoSetVarM(gmo, reduced_costs);
+      gmoSetSolutionStatus(gmo, NULL, NULL, NULL, NULL);
+      gmoCompleteSolution(gmo);
+      free(raw_duals);
+      free(final_duals);
+      free(reduced_costs);
+      have_marginals = 1;
     }
-    // User explicitly forces marginals on MIQCP / MIP / Problems with discrete vars (requestMarginals = 1 or 2)
-    else if (request_marginals == 1 || request_marginals == 2)
-    {
-      if (gmoModelType(gmo) == gmoProc_miqcp || has_integer_vars)
-      {
-        printOut(gev, "WARNING: cuOpt does not currently support dual solutions for MIQCP/discrete models.\n");
-      }
-      else
-      {
-        printOut(gev, "WARNING: cuOpt link does not currently support continuous subproblem solves for MIP marginals.\n");
-      }
-      gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
-    }
-    // Default fallback for MIP / MIQCP when requestMarginals is -1 (inexpensive only)
     else
     {
-      gmoSetHeadnTail(gmo, gmoHmarginals, 0.0);
+      if (request_marginals == 1 || request_marginals == 2)
+      {
+        if (limit_point)
+          printOut(gev, "WARNING: No marginals are returned for a solve stopped by a limit.\n");
+        else if (has_integer_vars)
+          printOut(gev, "WARNING: cuOpt link does not currently support continuous subproblem solves for MIP marginals.\n");
+        else if (num_quad_constraints > 0)
+          printOut(gev, "WARNING: cuOpt does not return dual solutions for models with quadratic constraints.\n");
+        else
+          printOut(gev, "WARNING: No marginals are returned since presolve is enabled without dual postsolve.\n");
+      }
+      // sets marginals to NA and computes variable/equation statuses from the levels
+      gmoSetSolutionPrimal(gmo, objective_coefficients);
     }
 
-    gmoCompleteSolution(gmo);
+    // requestMarginals=2: marginals are demanded, so report a problem if they are missing
+    if (request_marginals == 2 && !have_marginals && gmoSolveStat(gmo) == gmoSolveStat_Normal)
+      gmoSolveStatSet(gmo, gmoSolveStat_Solver);
   }
-  else if (fp_mip_trace) // gmoModelStat(gmo) == gmoModelStat_NoSolutionReturned
+  else if (fp_mip_trace) // no solution
   {
     double total_elapsed = (gevTimeJNow(gev) - context.tstart) * 3600.0 * 24.0;
     solution_bound = GMS_SV_NA;
@@ -985,6 +1097,7 @@ int main(int argc, char *argv[])
     }
     mip_trace_line('E', 0, 0, total_elapsed, GMS_SV_NA, solution_bound);
   }
+UNLOAD:
   status = gmoUnloadSolutionLegacy(gmo);
   if (status) {
     printOut(gev, "Problems unloading solution\n");
@@ -1007,6 +1120,7 @@ DONE:
 
   // Free dynamically mapped structures
   free(gams2cuopt_row);
+  free(row_qnz);
   free(orig_rhs);
   free(orig_sense);
 
@@ -1098,200 +1212,3 @@ static void mip_get_solution_cb(const cuopt_float_t *solution, const cuopt_float
   double bnd = *solution_bound;
   mip_trace_line('I', 0, 1, elapsed, obj, bnd);
 }
-
-#if 0
-t program for cuOpt linear programming solver
- */
-
-// Include the cuOpt linear programming solver header
-#include <cuopt/linear_programming/cuopt_c.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-// Convert termination status to string
-const char* termination_status_to_string(cuopt_int_t termination_status)
-{
-  switch (termination_status) {
-    case CUOPT_TERMINATION_STATUS_OPTIMAL:
-      return "Optimal";
-    case CUOPT_TERMINATION_STATUS_INFEASIBLE:
-      return "Infeasible";
-    case CUOPT_TERMINATION_STATUS_UNBOUNDED:
-      return "Unbounded";
-    case CUOPT_TERMINATION_STATUS_ITERATION_LIMIT:
-      return "Iteration limit";
-    case CUOPT_TERMINATION_STATUS_TIME_LIMIT:
-      return "Time limit";
-    case CUOPT_TERMINATION_STATUS_NUMERICAL_ERROR:
-      return "Numerical error";
-    case CUOPT_TERMINATION_STATUS_PRIMAL_FEASIBLE:
-      return "Primal feasible";
-    case CUOPT_TERMINATION_STATUS_FEASIBLE_FOUND:
-      return "Feasible found";
-    default:
-      return "Unknown";
-  }
-}
-
-// Test simple LP problem
-cuopt_int_t test_simple_lp()
-{
-  cuOptOptimizationProblem problem = NULL;
-  cuOptSolverSettings settings = NULL;
-  cuOptSolution solution = NULL;
-
-  /* Solve the following LP:
-     minimize -0.2*x1 + 0.1*x2
-     subject to:
-     3.0*x1 + 4.0*x2 <= 5.4
-     2.7*x1 + 10.1*x2 <= 4.9
-     x1, x2 >= 0
-  */
-
-  cuopt_int_t num_variables = 2;
-  cuopt_int_t num_constraints = 2;
-  cuopt_int_t nnz = 4;
-
-  // CSR format constraint matrix
-  // https://docs.nvidia.com/nvpl/latest/sparse/storage_format/sparse_matrix.html#compressed-sparse-row-csr
-  // From the constraints:
-  // 3.0*x1 + 4.0*x2 <= 5.4
-  // 2.7*x1 + 10.1*x2 <= 4.9
-  cuopt_int_t row_offsets[] = {0, 2, 4};
-  cuopt_int_t column_indices[] = {0, 1, 0, 1};
-  cuopt_float_t values[] = {3.0, 4.0, 2.7, 10.1};
-
-  // Objective coefficients
-  // From the objective function: minimize -0.2*x1 + 0.1*x2
-  // -0.2 is the coefficient of x1
-  // 0.1 is the coefficient of x2
-  cuopt_float_t objective_coefficients[] = {-0.2, 0.1};
-
-  // Constraint bounds
-  // From the constraints:
-  // 3.0*x1 + 4.0*x2 <= 5.4
-  // 2.7*x1 + 10.1*x2 <= 4.9
-  cuopt_float_t constraint_upper_bounds[] = {5.4, 4.9};
-  cuopt_float_t constraint_lower_bounds[] = {-CUOPT_INFINITY, -CUOPT_INFINITY};
-
-  // Variable bounds
-  // From the constraints:
-  // x1, x2 >= 0
-  cuopt_float_t var_lower_bounds[] = {0.0, 0.0};
-  cuopt_float_t var_upper_bounds[] = {CUOPT_INFINITY, CUOPT_INFINITY};
-
-  // Variable types (continuous)
-  // From the constraints:
-  // x1, x2 >= 0
-  char variable_types[] = {CUOPT_CONTINUOUS, CUOPT_CONTINUOUS};
-
-  cuopt_int_t status;
-  cuopt_float_t time;
-  cuopt_int_t termination_status;
-  cuopt_float_t objective_value;
-
-  printf("Creating and solving simple LP problem...\n");
-
-  // Create the problem
-  status = cuOptCreateRangedProblem(num_constraints,
-                                   num_variables,
-                                   CUOPT_MINIMIZE,  // minimize=False
-                                   0.0,            // objective offset
-                                   objective_coefficients,
-                                   row_offsets,
-                                   column_indices,
-                                   values,
-                                   constraint_lower_bounds,
-                                   constraint_upper_bounds,
-                                   var_lower_bounds,
-                                   var_upper_bounds,
-                                   variable_types,
-                                   &problem);
-  if (status != CUOPT_SUCCESS) {
-    printf("Error creating problem: %d\n", status);
-    goto DONE;
-  }
-
-  // Create solver settings
-  status = cuOptCreateSolverSettings(&settings);
-  if (status != CUOPT_SUCCESS) {
-    printf("Error creating solver settings: %d\n", status);
-    goto DONE;
-  }
-
-  // Set solver parameters
-  status = cuOptSetFloatParameter(settings, CUOPT_ABSOLUTE_PRIMAL_TOLERANCE, 0.0001);
-  if (status != CUOPT_SUCCESS) {
-    printf("Error setting optimality tolerance: %d\n", status);
-    goto DONE;
-  }
-
-  // Solve the problem
-  status = cuOptSolve(problem, settings, &solution);
-  if (status != CUOPT_SUCCESS) {
-    printf("Error solving problem: %d\n", status);
-    goto DONE;
-  }
-
-  // Get solution information
-  status = cuOptGetSolveTime(solution, &time);
-  if (status != CUOPT_SUCCESS) {
-    printf("Error getting solve time: %d\n", status);
-    goto DONE;
-  }
-
-  status = cuOptGetTerminationStatus(solution, &termination_status);
-  if (status != CUOPT_SUCCESS) {
-    printf("Error getting termination status: %d\n", status);
-    goto DONE;
-  }
-
-  status = cuOptGetObjectiveValue(solution, &objective_value);
-  if (status != CUOPT_SUCCESS) {
-    printf("Error getting objective value: %d\n", status);
-    goto DONE;
-  }
-
-  // Print results
-  printf("\nResults:\n");
-  printf("--------\n");
-  printf("Termination status: %s (%d)\n", termination_status_to_string(termination_status), termination_status);
-  printf("Solve time: %f seconds\n", time);
-  printf("Objective value: %f\n", objective_value);
-
-  // Get and print solution variables
-  cuopt_float_t* solution_values = (cuopt_float_t*)malloc(num_variables * sizeof(cuopt_float_t));
-  status = cuOptGetPrimalSolution(solution, solution_values);
-  if (status != CUOPT_SUCCESS) {
-    printf("Error getting solution values: %d\n", status);
-    free(solution_values);
-    goto DONE;
-  }
-
-  printf("\nPrimal Solution: Solution variables \n");
-  for (cuopt_int_t i = 0; i < num_variables; i++) {
-    printf("x%d = %f\n", i + 1, solution_values[i]);
-  }
-  free(solution_values);
-
-DONE:
-  cuOptDestroyProblem(&problem);
-  cuOptDestroySolverSettings(&settings);
-  cuOptDestroySolution(&solution);
-
-  return status;
-}
-
-int main() {
-  // Run the test
-  cuopt_int_t status = test_simple_lp();
-
-  if (status == CUOPT_SUCCESS) {
-    printf("\nTest completed successfully!\n");
-    return 0;
-  } else {
-    printf("\nTest failed with status: %d\n", status);
-    return 1;
-  }
-}
-#endif
