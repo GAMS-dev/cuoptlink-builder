@@ -6,13 +6,13 @@ This project builds and packages the [GAMS](https://gams.com/) and [GAMSPy](http
 
 You can get more details and tips by reading the blog post ["GPU-Accelerated Optimization with GAMS and NVIDIA cuOpt"](https://www.gams.com/blog/2025/09/gpu-accelerated-optimization-with-gams-and-nvidia-cuopt/).
 
-Supported model types are LP, MIP, RMIP, QCP, MIQCP, RMIQCP.
+Supported model types are LP, MIP, RMIP, QCP, RMIQCP. QCP and RMIQCP models must be convex. Mixed-integer quadratic models (MIQCP) are not supported, since cuOpt's MIP solver only handles linear objectives and constraints.
 
 ## Requirements
 
 - **Operating System:** Linux, Windows 11 through WSL2
 - **CPU architecture:** x86_64, arm64
-- **GAMS:** Version 49 or newer
+- **GAMS:** Version 54 or newer
 - **GAMSPy:** Version 1.12.1 or newer
 - **NVIDIA GPU:** Volta architecture or better
 - **CUDA Runtime Libraries:** 12 or 13
@@ -92,3 +92,12 @@ gams trnsport lp cuopt
 ### GAMS models
 
 Various GAMS models can be found in subfolder `examples/models` and are used to verify the solver link.
+### Regression tests
+
+The self-checking models in `examples/models/regression_tests` cover dual signs and reduced costs, QP/QCQP marginals, RMIQCP, option handling, error reporting, LP limit points, GMO handling (e.g. `=N=` rows, `requestMarginals=2`), rejection of unsupported features (SOS, semi-integer, MIQCP) and solve/model status mapping. Each model aborts if a result deviates from the reference values (obtained with CPLEX). Run them all against the GAMS system found in your `PATH` (it needs a GPU and the installed solver link):
+
+```
+examples/models/regression_tests/run_tests.sh
+```
+
+The script prints `[PASS]` or `[FAIL]` per model and keeps the listing and log file of failed models for inspection. Its exit code is the number of failed models.
