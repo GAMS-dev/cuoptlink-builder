@@ -14,8 +14,9 @@ Supported model types are LP, MIP, RMIP, QCP, RMIQCP. QCP and RMIQCP models must
 - **CPU architecture:** x86_64, arm64
 - **GAMS:** Version 54 or newer
 - **GAMSPy:** Version 1.12.1 or newer
-- **NVIDIA GPU:** Volta architecture or better
+- **NVIDIA GPU:** Volta architecture or better with CUDA 12, Turing architecture or better with CUDA 13
 - **CUDA Runtime Libraries:** 12 or 13
+- **System libraries:** OpenSSL 3 (`libssl.so.3`, `libcrypto.so.3`) and zlib (`libz.so.1`)
 
 ## Installation using `fetch-cuoptlink.py`
 
@@ -70,9 +71,9 @@ python fetch-cuoptlink.py uninstall -g /opt/gams/gams55.0
 - Make sure [CUDA runtime](https://developer.nvidia.com/cuda-downloads?target_os=Linux) is installed
 - Download and unpack `cuopt-link-release-cu12-{x86_64,arm64}.zip` or `cuopt-link-release-cu13-{x86_64,arm64}.zip` (for CUDA 12 and 13 respectively) from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases):
     - Unpack the contents of `cuopt-link-release-cu*-*.zip` into your GAMS system directory. For GAMSPy, you can find out your system directory by running `gamspy show base`. So for example you can run `unzip -o cuopt-link-release-cu*-*.zip -d $(gamspy show base)`.
-    - **Caution:** This will overwrite any existing `gamsconfig.yaml` file in that directory. The contained `gamsconfig.yaml` contains a `solverConfig` section to make cuOpt available to GAMS.
+    - The archive contains a `gamsconfig_cuopt.yaml` with a `solverConfig` section that makes cuOpt available to GAMS. If the GAMS system directory has no `gamsconfig.yaml` yet, copy it, e.g. `cp gamsconfig_cuopt.yaml gamsconfig.yaml`. Otherwise add its `solverConfig` entry to the existing `gamsconfig.yaml` (`fetch-cuoptlink.py` does this merge automatically).
 
-The neccessary files from the CUDA 12 or 13 runtime can also be downloaded as convenient archive `cu12-runtime-{x86_64,arm64}.zip` or `cu13-runtime-{x86_64,arm64}.zip` from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases).
+The necessary files from the CUDA 12 or 13 runtime can also be downloaded as convenient archive `cu12-runtime-{x86_64,arm64}.zip` or `cu13-runtime-{x86_64,arm64}.zip` from the [releases page](https://github.com/GAMS-dev/cuoptlink-builder/releases).
 
 ## Test the setup
 
@@ -106,11 +107,12 @@ gams mymodel lp=cuopt optfile=1
 ### Notebooks
 
 - [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb) for CUDA 12 on x86_64
-- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt_cu13.ipynb) for CUDA 13 on x86_64
+- [examples/trnsport_cuopt_cu13.ipynb](examples/trnsport_cuopt_cu13.ipynb) for CUDA 13 on x86_64
 
 ### GAMS models
 
 Various GAMS models can be found in subfolder `examples/models` and are used to verify the solver link.
+
 ### Regression tests
 
 The self-checking models in `examples/models/regression_tests` cover dual signs and reduced costs, QP/QCQP marginals, RMIQCP, option handling, error reporting, LP limit points, GMO handling (e.g. `=N=` rows, `requestMarginals=2`), rejection of unsupported features (SOS, semi-integer, MIQCP) and solve/model status mapping. Each model aborts if a result deviates from the reference values (obtained with CPLEX). Run them all against the GAMS system found in your `PATH` (it needs a GPU and the installed solver link):
@@ -120,3 +122,13 @@ examples/models/regression_tests/run_tests.sh
 ```
 
 The script prints `[PASS]` or `[FAIL]` per model and keeps the listing and log file of failed models for inspection. Its exit code is the number of failed models.
+
+### gamslib regression test
+
+`tests/test-gamslib-cuopt.py` solves the gamslib models listed in `tests/baseline.txt` with cuOpt and compares the objective values against a CPLEX baseline. It needs a GPU and the installed solver link:
+
+```
+python3 tests/test-gamslib-cuopt.py -g <GAMS system directory> -j 2   # -g defaults to the GAMS found in PATH
+```
+
+Use `-r` to change the time limit per model (default 120s), `-t` for the relative tolerance (default 1e-6) and pass model names to run only a subset. The exit code is 1 if any model mismatches or fails to produce a solution.
