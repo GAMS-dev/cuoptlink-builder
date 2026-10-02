@@ -131,4 +131,4 @@ The script prints `[PASS]` or `[FAIL]` per model and keeps the listing and log f
 python3 tests/test-gamslib-cuopt.py -g <GAMS system directory> -j 2   # -g defaults to the GAMS found in PATH
 ```
 
-Use `-r` to change the time limit per model (default 120s), `-t` for the relative tolerance (default 1e-6) and pass model names to run only a subset. The exit code is 1 if any model mismatches or fails to produce a solution.
+Use `-r` to change the time limit per model (default 120s; an optional fourth column in `tests/baseline.txt` sets a model-specific time limit instead), `-t` for the relative tolerance (default 1e-6) and pass model names to run only a subset. The exit code is 1 if any model mismatches or fails to produce a solution.
