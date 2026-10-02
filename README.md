@@ -98,6 +98,8 @@ gams mymodel lp=cuopt optfile=1
 - `multigpu_pdlp_partitioner` selects how the problem is split across the GPUs: `0` auto (default), `1` KaMinPar (better balanced, extra partitioning time), `2` round robin.
 - The GPUs used can be restricted with `CUDA_VISIBLE_DEVICES`, e.g. `CUDA_VISIBLE_DEVICES=0,1 gams mymodel lp=cuopt optfile=1`.
 - Only LPs are supported, and the whole problem currently has to fit into the memory of a single GPU.
+- Starting values (levels and marginals) from GAMS are not passed to multi-GPU PDLP.
+- Convergence can differ from single-GPU PDLP, so some models need noticeably more iterations.
 
 ## Examples
 
