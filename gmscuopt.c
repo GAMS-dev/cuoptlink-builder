@@ -877,6 +877,23 @@ int main(int argc, char *argv[])
   }
   gmoSetHeadnTail(gmo, gmoHresused, solution_time);
 
+  // Iterations and nodes; cuOpt only provides the MIP attributes for MIP solutions and the LP
+  // attributes for LP solutions (otherwise CUOPT_INVALID_ARGUMENT)
+  cuopt_int_t nodes = -1;
+#ifdef CUOPT_SOLUTION_ATTR_MIP_NUM_NODES
+  cuopt_int_t iterations = 0;
+  if (cuOptGetSolutionIntAttribute(solution, CUOPT_SOLUTION_ATTR_MIP_NUM_NODES, &nodes) == CUOPT_SUCCESS) {
+    gmoSetHeadnTail(gmo, gmoTmipnod, nodes);
+    if (cuOptGetSolutionIntAttribute(solution, CUOPT_SOLUTION_ATTR_MIP_NUM_SIMPLEX_ITERATIONS, &iterations) == CUOPT_SUCCESS)
+      gmoSetHeadnTail(gmo, gmoHiterused, iterations);
+  }
+  else {
+    nodes = -1;
+    if (cuOptGetSolutionIntAttribute(solution, CUOPT_SOLUTION_ATTR_LP_NUM_ITERATIONS, &iterations) == CUOPT_SUCCESS)
+      gmoSetHeadnTail(gmo, gmoHiterused, iterations);
+  }
+#endif
+
   int is_mip = has_integer_vars && (gmoModelType(gmo) == gmoProc_mip || gmoModelType(gmo) == gmoProc_miqcp);
   int have_solution = 0;
   int limit_point = 0; // continuous model stopped by an iteration/time limit
@@ -932,7 +949,7 @@ int main(int argc, char *argv[])
         // cuOpt does not expose the work units spent, so a set work limit is assumed to be the cause
         if (solution_time >= 0.99 * time_limit || work_limit < 1e10)
           gmoSolveStatSet(gmo, gmoSolveStat_Resource);
-        else if (node_limit < INT32_MAX)
+        else if (node_limit < INT32_MAX && (nodes < 0 || nodes >= node_limit)) // nodes < 0: unknown
           gmoSolveStatSet(gmo, gmoSolveStat_Iteration);
         else
           gmoSolveStatSet(gmo, gmoSolveStat_Solver);
