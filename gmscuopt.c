@@ -161,6 +161,8 @@ int main(int argc, char *argv[])
   cuopt_float_t* constraint_matrix_coefficent_values=NULL;
   cuopt_float_t* objective_coefficients=NULL;
   cuopt_float_t* rhs=NULL;
+  cuopt_float_t* constraint_lower_bounds=NULL;
+  cuopt_float_t* constraint_upper_bounds=NULL;
   cuopt_float_t* lower_bounds=NULL;
   cuopt_float_t* upper_bounds=NULL;
   char* constraint_sense=NULL;
@@ -315,8 +317,19 @@ int main(int argc, char *argv[])
       printOut(gev, "Error querying method option.\n");
       goto DONE;
     }
+    cuopt_int_t num_gpus;
+    status = cuOptGetIntegerParameter(settings, CUOPT_NUM_GPUS, &num_gpus);
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error querying num_gpus option.\n");
+      goto DONE;
+    }
+    // multi-GPU PDLP rejects initial solutions
+    int multigpu_pdlp = chosen_method == CUOPT_METHOD_PDLP && (num_gpus == -1 || num_gpus > 1);
+    if (multigpu_pdlp && gmoHaveBasis(gmo))
+      printOut(gev, "Multi-GPU PDLP does not support initial solutions, ignoring the levels and marginals.\n");
     // only when some PDLP is used and we have basis
-    if ((chosen_method == CUOPT_METHOD_PDLP || chosen_method == CUOPT_METHOD_CONCURRENT) && gmoHaveBasis(gmo))
+    else if ((chosen_method == CUOPT_METHOD_PDLP || chosen_method == CUOPT_METHOD_CONCURRENT) && gmoHaveBasis(gmo))
     {
       int nvars = gmoN(gmo), nconstraints = gmoM(gmo);
       double *lvls = (double *)malloc(sizeof(double) * nvars);
@@ -432,6 +445,8 @@ int main(int argc, char *argv[])
     constraint_matrix_coefficent_values = malloc(nnz * sizeof(cuopt_float_t));
     objective_coefficients = malloc((num_variables) * sizeof(cuopt_float_t));
     rhs = malloc((num_linear_constraints) * sizeof(cuopt_float_t));
+    constraint_lower_bounds = malloc((num_linear_constraints) * sizeof(cuopt_float_t));
+    constraint_upper_bounds = malloc((num_linear_constraints) * sizeof(cuopt_float_t));
     lower_bounds = malloc((num_variables) * sizeof(cuopt_float_t));
     upper_bounds = malloc((num_variables) * sizeof(cuopt_float_t));
     constraint_sense = malloc((num_linear_constraints) * sizeof(char));
@@ -442,6 +457,8 @@ int main(int argc, char *argv[])
         (constraint_matrix_coefficent_values == NULL) ||
         (objective_coefficients == NULL) ||
         (rhs == NULL) ||
+        (constraint_lower_bounds == NULL) ||
+        (constraint_upper_bounds == NULL) ||
         (lower_bounds == NULL) ||
         (upper_bounds == NULL) ||
         (constraint_sense == NULL) ||
@@ -580,6 +597,8 @@ int main(int argc, char *argv[])
 
         constraint_sense[lin_row] = orig_sense[i];
         rhs[lin_row] = orig_rhs[i];
+        constraint_lower_bounds[lin_row] = (orig_sense[i] == CUOPT_LESS_THAN) ? -CUOPT_INFINITY : orig_rhs[i];
+        constraint_upper_bounds[lin_row] = (orig_sense[i] == CUOPT_GREATER_THAN) ? CUOPT_INFINITY : orig_rhs[i];
 
         nnz += rnz;
         lin_row++;
@@ -593,7 +612,9 @@ int main(int argc, char *argv[])
       goto DONE;
     }
 
-    status = cuOptCreateProblem(
+    // Ranged form, since cuOpt's multi-GPU PDLP (without presolve) ignores the row types + RHS
+    // form of cuOptCreateProblem and sees no constraints
+    status = cuOptCreateRangedProblem(
         num_linear_constraints, // Use mapped linear size
         num_variables,
         (gmoSense(gmo) == gmoObj_Min) ? CUOPT_MINIMIZE : CUOPT_MAXIMIZE,
@@ -602,8 +623,8 @@ int main(int argc, char *argv[])
         constraint_matrix_row_offsets,
         constraint_matrix_column_indices,
         constraint_matrix_coefficent_values,
-        constraint_sense,
-        rhs,
+        constraint_lower_bounds,
+        constraint_upper_bounds,
         lower_bounds,
         upper_bounds,
         variable_types,
@@ -1105,6 +1126,8 @@ DONE:
   free(constraint_matrix_coefficent_values);
   free(objective_coefficients);
   free(rhs);
+  free(constraint_lower_bounds);
+  free(constraint_upper_bounds);
   free(lower_bounds);
   free(upper_bounds);
   free(constraint_sense);
