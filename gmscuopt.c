@@ -1035,18 +1035,7 @@ int main(int argc, char *argv[])
         final_duals[i] = gams2cuopt_row ? raw_duals[gams2cuopt_row[i]] : raw_duals[i];
 
       cuopt_float_t *reduced_costs = malloc(num_variables * sizeof(cuopt_float_t));
-      if (obj_qnz == 0)
-      {
-        // cuOpt 26.08's PDLP returns all-zero reduced costs, so compute them for LPs from the
-        // duals as d = c - A^T y (exact for dual simplex and barrier as well). GMO's own
-        // computation (gmoSetSolution2) ignores c when the objective variable is eliminated.
-        status = gmoGetObjVector(gmo, reduced_costs, NULL);
-        for (int r = 0; r < num_constraints && !status; r++)
-          for (int k = constraint_matrix_row_offsets[r]; k < constraint_matrix_row_offsets[r + 1]; k++)
-            reduced_costs[constraint_matrix_column_indices[k]] -= constraint_matrix_coefficent_values[k] * raw_duals[r];
-      }
-      else
-        status = cuOptGetReducedCosts(solution, reduced_costs);
+      status = cuOptGetReducedCosts(solution, reduced_costs);
       if (status)
       {
         printOut(gev, "Error getting reduced costs: %d\n", status);
