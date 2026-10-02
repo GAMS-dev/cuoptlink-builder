@@ -248,6 +248,13 @@ int main(int argc, char *argv[])
       goto DONE;
     }
   }
+  if (gevGetIntOpt(gev, gevNodeLim) > 0) { // GAMS nodlim=0 means no limit
+    status = cuOptSetIntegerParameter(settings, CUOPT_NODE_LIMIT, gevGetIntOpt(gev, gevNodeLim));
+    if (status != CUOPT_SUCCESS) {
+      printOut(gev, "Error setting node limit: %d\n", status);
+      goto DONE;
+    }
+  }
   if (gevGetDblOpt(gev, gevResLim) < RESLIM_INFINITY) {
     status = cuOptSetFloatParameter(settings, CUOPT_TIME_LIMIT, gevGetDblOpt(gev, gevResLim));
     if (status != CUOPT_SUCCESS) {
