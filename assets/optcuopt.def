@@ -44,6 +44,13 @@ iteration_limit integer 0 maxint 0 maxint 1 2 Controls the iteration limit after
 infeasibility_detection boolean 0 0 1 2 Controls whether PDLP should detect infeasibility
 strict_infeasibility boolean 0 0 1 2 Controls the strict infeasibility mode in PDLP
 crossover boolean 0 0 1 2 Controls whether PDLP should crossover to a basic solution after an optimal solution is found                  
+concurrent_nnz_cutoff integer 0 50000000 -1 maxint 1 2 Controls the reduced number of nonzeros at or above which barrier and dual simplex are skipped in concurrent mode (-1 disables the cutoff)
+primal_simplex_pricing enumint 0 1 1 2 Controls the pricing rule of the primal simplex method
+ 0 1 Dantzig pricing
+ 1 1 Devex pricing (default)
+dual_simplex_initial_perturbation integer 0 -1 -1 1 1 2 Controls whether the simplex method perturbs the problem initially (-1 automatic, 0 off, 1 on)
+dual_simplex_remove_perturbation integer 0 -1 -1 1 1 2 Controls whether the simplex method removes the perturbation (-1 automatic, 0 off, 1 on)
+pdlp_hyper_enable_curtis_reid_scaling boolean 0 1 1 2 Controls whether Curtis-Reid prescaling runs before Ruiz/Pock-Chambolle scaling in PDLP
 save_best_primal_so_far boolean 0 0 1 2 Controls whether PDLP should save the best primal solution so far   
 first_primal_feasible boolean 0 0 1 2 Controls whether PDLP should stop when the first primal feasible solution is found
 per_constraint_residual boolean 0 0 1 2 Controls whether PDLP should compute the primal & dual residual per constraint instead of globally
@@ -72,6 +79,12 @@ barrier_dual_initial_point enumint 0 -1 1 4 Controls the method used to compute 
  2 1 use a Sturm/SeDuMi-style mu-based primal and dual initial point.
 barrier_iterative_refinement boolean 0 1 1 4 Controls whether iterative refinement is applied after each barrier iteration to improve solution accuracy.
 qcqp_hyper_ruiz_equilibration integer 0 -1 -1 1 1 4 Controls Ruiz equilibration for QCQP (barrier) scaling (-1 automatic, 0 off, 1 on)
+barrier_adaptive_regularization integer 0 -1 -1 1 1 4 Controls adaptive regularization in the barrier method (-1 automatic, 0 off, 1 on)
+barrier_primal_regularization double 0 -1 -1 maxdouble 1 4 Controls the initial primal regularization for the augmented system (-1 automatic)
+barrier_dual_regularization double 0 -1 -1 maxdouble 1 4 Controls the initial dual regularization for the augmented system (-1 automatic)
+barrier_initial_point_safeguard double 0 10 0 maxdouble 1 4 Controls the margin pushing the barrier initial iterate into the interior of the nonnegative orthant / second-order cone
+barrier_presolve_bound_free_variables integer 0 -1 -1 1 1 4 Controls whether free variables are bounded during barrier presolve (-1 automatic, 0 off, 1 on)
+barrier_hyper_gpu_ruiz_nnz_threshold integer 0 500000 0 maxint 1 4 Controls the number of nonzeros (of A and Q) at or above which barrier Ruiz equilibration runs on the GPU instead of the CPU
 barrier_step_scale double 0 0.9 0.5 0.9999 1 4 Controls the scaling factor applied to the step size in the barrier method.
 absolute_primal_tolerance double 0 0.0001 0 0.1 1 2 Controls the absolute primal tolerance used in PDLP's primal feasibility check
 relative_primal_tolerance double 0 0.0001 0 0.1 1 2 Controls the relative primal tolerance used in PDLP's primal feasibility check
@@ -111,6 +124,8 @@ mip_implied_bound_cuts integer 0 -1 -1 1 1 3 Controls whether to enable implied 
 mip_clique_cuts integer 0 -1 -1 1 1 3 Controls whether to enable clique cuts (-1 auto/default, 0 off, >0 on).
 mip_zero_half_cuts integer 0 -1 -1 1 1 3 Controls whether to use zero-half cuts (-1 automatic, 0 off, 1 on)
 mip_rins integer 0 -1 -1 1 1 3 Controls whether to use (recursive) RINS (-1 automatic, 0 off, 1 on)
+mip_rens integer 0 -1 -1 1 1 3 Controls whether to use the RENS (relaxation enforced neighborhood search) heuristic (-1 automatic, 0 off, 1 on)
+mip_mutation integer 0 -1 -1 1 1 3 Controls whether to use the mutation heuristic, which fixes a random subset of integer variables to their incumbent values (-1 automatic, 0 off, 1 on)
 mip_determinism_mode enumint 0 0 1 3 Controls whether the MIP solver runs in opportunistic or deterministic mode
  0 1 opportunistic, results may vary between runs due to parallelism (default)
  1 1 deterministic (experimental), improves reproducibility across runs with the same number of threads
@@ -159,6 +174,11 @@ mip_hyper_submip_target_mip_gap double 0 0.01 0 1 1 3 Controls MIP gap target fo
 mip_hyper_submip_max_level integer 0 10 0 maxint 1 3 Controls maximum sub-MIP recursion level
 mip_hyper_submip_iteration_limit_ratio double 0 0.8 0 1 1 3 Controls sub-MIP simplex iteration limit as a factor of the parent branch-and-bound iterations
 mip_hyper_submip_enable_cpufj boolean 0 1 1 3 Controls whether CPU feasibility jump runs over the sub-MIP
+mip_hyper_submip_node_limit_offset integer 0 200 0 maxint 1 3 Controls base node limit for the sub-MIP
+mip_hyper_submip_iteration_limit_offset integer 0 10000 0 maxint 1 3 Controls base sub-MIP simplex iteration limit for root heuristics
+mip_hyper_submip_round_close_ratio double 0 0.8 0 1 1 3 Controls share of the still unfixed integers left for later neighbourhood rounds (0 reaches the target fix rate in a single round)
+mip_hyper_block_bve boolean 0 1 1 3 Controls whether blocks of binaries are eliminated in cuOpt's MIP presolve (needs mip_probing)
+mip_hyper_heuristic_presolve_max_rounds integer 0 -1 -1 maxint 1 3 Controls the Papilo presolve rounds cap in heuristics (<0 derives it from the problem, 0 keeps the Papilo default)
 mip_hyper_diving_show_type boolean 0 0 1 3 log diving heuristic type when it finds a new incumbent
 mip_semi_continuous_big_m double 0 1e10 1 maxdouble 1 3 Controls the Big-M coefficient used when linearizing semi-continuous variable constraints
 
