@@ -40,7 +40,7 @@ gcc -g3 -O0 -Wall gmscuopt.c -o gmscuopt-cu13.out \
     -DCUOPT_HASH=\"$CUOPT_HASH\" \
     -I "$GAMSCAPI" "$GAMSCAPI/gmomcc.c" "$GAMSCAPI/optcc.c" "$GAMSCAPI/gevmcc.c" \
     -I "$CUOPT/include" "$JITLINK/libnvJitLink.so.13" \
-    -L "$CUOPT/lib64" -lcuopt
+    -L "$CUOPT/lib64" -lcuopt_mathopt
 
 # 5. Patch RPATH
 patchelf --set-rpath \$ORIGIN gmscuopt-cu13.out
@@ -53,15 +53,16 @@ mkdir -p "$GAMSDIST"
 
 mv gmscuopt-cu13.out "$GAMSDIST/gmscuopt.out"
 
-cp "$CUOPT/lib64/libcuopt.so" "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libraft_cu13.libs/libgomp-*.so* "$GAMSDIST/"
+cp "$CUOPT/lib64/libcuopt_mathopt.so" "$GAMSDIST/"
+cp "$CUOPT/lib64/libcuopt_client.so" "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libgomp-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libtbb-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libtbbmalloc-*.so* "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libomp-*.so* "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt/lib64/libcudss_mtlayer_cuopt.so "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libcudart-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/rapids_logger/lib64/librapids_logger.so "$GAMSDIST/"
 cp "$SITE_PACKAGES"/librmm/lib64/librmm.so "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcudss.so* "$GAMSDIST/"
-cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcudss_mtlayer_gomp.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libnvJitLink.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcublas.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcublasLt.so* "$GAMSDIST/"
