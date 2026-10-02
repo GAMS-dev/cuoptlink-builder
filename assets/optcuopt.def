@@ -3,7 +3,11 @@
 *
 * name type usermap default low high visible group
 num_cpu_threads integer 0 -1 -1 maxint 1 1 Controls the number of CPU threads used in the LP and MIP solvers (default GAMS Threads)
-num_gpus integer 0 1 1 2 1 2 Controls the number of GPUs to use for the solve. This setting is only relevant for LP problems that uses concurrent mode and supports up to 2 GPUs at the moment. Using this mode will run PDLP and barrier in parallel on different GPUs to avoid sharing single GPU resources.
+num_gpus integer 0 1 -1 72 1 2 Controls the number of GPUs to use for the solve. In concurrent mode for LP problems up to 2 GPUs are used, running PDLP and barrier in parallel on different GPUs to avoid sharing single GPU resources. With method pdlp, a value of -1 (all visible GPUs) or greater than 1 runs multi-GPU PDLP, which shards the LP across GPUs (the problem must currently fit into the memory of a single GPU).
+multigpu_pdlp_partitioner enumint 0 0 1 2 Controls how multi-GPU PDLP partitions the problem across GPUs
+ 0 1 auto (default) RoundRobin on 1 GPU, KaMinPar otherwise
+ 1 1 KaMinPar multi-threaded graph partitioner, better balanced shards at the cost of extra partitioning time
+ 2 1 RoundRobin no partitioning graph built
 presolve enumint 0 -1 1 1 Controls which presolver (if any) to use for presolve reductions.
  -1 1 default (Papilo for MIP, PSLP for LP)
   0 1 off (disable presolve)
