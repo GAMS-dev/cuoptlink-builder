@@ -1,8 +1,9 @@
 """Regression test: solve gamslib models with cuOpt and compare against CPLEX.
 
-Each model listed in baseline.txt (name, model type, CPLEX objective) is
-extracted with `gamslib`, solved with `solver=cuopt`, and the objective value
-reported in the GAMS trace file is compared against the CPLEX reference.
+Each model listed in baseline.txt (name, model type, CPLEX objective and optionally a
+model-specific time limit in seconds that replaces --reslim) is extracted with `gamslib`,
+solved with `solver=cuopt`, and the objective value reported in the GAMS trace file is
+compared against the CPLEX reference.
 
 Run with:
     python3 tests/test-gamslib-cuopt.py [-g GAMS_DIR] [-j JOBS] [model ...]
@@ -47,13 +48,14 @@ class Result:
         return abs(self.obj - self.ref) / max(1.0, abs(self.ref))
 
 
-def read_baseline(path: str) -> list[tuple[str, str, float]]:
+def read_baseline(path: str) -> list[tuple[str, str, float, int | None]]:
     entries = []
     with open(path) as f:
         for line in f:
             fields = line.split()
-            if len(fields) == 3:
-                entries.append((fields[0], fields[1], float(fields[2])))
+            if len(fields) in (3, 4):
+                reslim = int(fields[3]) if len(fields) == 4 else None
+                entries.append((fields[0], fields[1], float(fields[2]), reslim))
     return entries
 
 
@@ -130,8 +132,6 @@ def main() -> int:
         entries = [e for e in entries if e[0] in args.models]
 
     work_dir = tempfile.mkdtemp(prefix="gamslib-cuopt-")
-    # Some models set their own resLim, so leave generous headroom beyond --reslim.
-    timeout = 2 * args.reslim + 60
 
     row = "{:6} {:12} {:6} {:>9} {:>9} {:>9} {:>17} {:>17} {}"
     print(f"cuOpt vs. CPLEX on {len(entries)} gamslib models "
@@ -142,8 +142,11 @@ def main() -> int:
     print("-" * len(header), flush=True)
 
     def job(entry):
-        name, model_type, ref = entry
-        res = run_model(gams_dir, work_dir, name, model_type, ref, args.reslim, timeout)
+        name, model_type, ref, model_reslim = entry
+        reslim = model_reslim or args.reslim
+        # Some models set their own resLim, so leave generous headroom beyond reslim.
+        timeout = 2 * reslim + 60
+        res = run_model(gams_dir, work_dir, name, model_type, ref, reslim, timeout)
         rel = res.rel_diff()
         ok = res.error is None and rel is not None and rel <= args.rtol
         obj = "NA" if res.obj is None else f"{res.obj:.10g}"
