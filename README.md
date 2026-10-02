@@ -82,6 +82,23 @@ gamslib trnsport
 gams trnsport lp cuopt
 ```
 
+## Multi-GPU PDLP
+
+With cuOpt 26.10 or newer, LPs can be solved with PDLP on several GPUs at once. This requires both `method 1` (PDLP) and `num_gpus -1` (all visible GPUs) or `num_gpus` greater than 1 in the option file:
+```
+* cuopt.opt
+method 1
+num_gpus -1
+```
+```
+gams mymodel lp=cuopt optfile=1
+```
+
+- Without `method 1`, i.e. in the default concurrent mode, `num_gpus 2` instead runs PDLP and barrier in parallel on two GPUs.
+- `multigpu_pdlp_partitioner` selects how the problem is split across the GPUs: `0` auto (default), `1` KaMinPar (better balanced, extra partitioning time), `2` round robin.
+- The GPUs used can be restricted with `CUDA_VISIBLE_DEVICES`, e.g. `CUDA_VISIBLE_DEVICES=0,1 gams mymodel lp=cuopt optfile=1`.
+- Only LPs are supported, and the whole problem currently has to fit into the memory of a single GPU.
+
 ## Examples
 
 ### Notebooks
