@@ -6,7 +6,8 @@ set -e
 # Users can export these before running the script, otherwise defaults are used.
 GAMSDIST="${GAMSDIST:-$HOME/gamsdist}"
 WORKSPACE="${WORKSPACE:-$(pwd)}"
-# Read build provenance from the mathopt wheel unless explicitly overridden below.
+CUOPT_VERSION="${CUOPT_VERSION:-26.08}"
+CUOPT_HASH="${CUOPT_HASH:-12345}"
 
 # 2. Dynamically find the site-packages directory to avoid hardcoding the Python version
 # or the venv directory name (some setups use "venv", others "uv"-style ".venv").
@@ -26,10 +27,8 @@ fi
 
 # 3. Export specific build paths
 export GAMSCAPI="$GAMSDIST/apifiles/C/api"
-export CUOPT="$SITE_PACKAGES/libcuopt_mathopt"
+export CUOPT="$SITE_PACKAGES/libcuopt"
 export JITLINK="$SITE_PACKAGES/nvidia/cu13/lib"
-CUOPT_VERSION="${CUOPT_VERSION:-$(<"$CUOPT/VERSION")}"
-CUOPT_HASH="${CUOPT_HASH:-$(<"$CUOPT/GIT_COMMIT")}"
 
 echo "Building GAMS cuOpt solver link..."
 echo "Using GAMSDIST: $GAMSDIST"
@@ -40,9 +39,8 @@ gcc -g3 -O0 -Wall gmscuopt.c -o gmscuopt-cu13.out \
     -DCUOPT_VERSION=\"$CUOPT_VERSION\" \
     -DCUOPT_HASH=\"$CUOPT_HASH\" \
     -I "$GAMSCAPI" "$GAMSCAPI/gmomcc.c" "$GAMSCAPI/optcc.c" "$GAMSCAPI/gevmcc.c" \
-    -I "$CUOPT/include" -I "$SITE_PACKAGES/libcuopt_client/include" "$JITLINK/libnvJitLink.so.13" \
-    -L "$CUOPT/lib64" -lcuopt_mathopt \
-    -L "$SITE_PACKAGES/libcuopt_client/lib64" -lcuopt_client
+    -I "$CUOPT/include" "$JITLINK/libnvJitLink.so.13" \
+    -L "$CUOPT/lib64" -lcuopt_mathopt
 
 # 5. Patch RPATH
 patchelf --set-rpath \$ORIGIN gmscuopt-cu13.out
@@ -56,15 +54,12 @@ mkdir -p "$GAMSDIST"
 mv gmscuopt-cu13.out "$GAMSDIST/gmscuopt.out"
 
 cp "$CUOPT/lib64/libcuopt_mathopt.so" "$GAMSDIST/"
-cp "$SITE_PACKAGES/libcuopt_client/lib64/libcuopt_client.so" "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_mathopt_cu13.libs/libgomp-*.so* "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_client_cu13.libs/libgomp-*.so* "$GAMSDIST/"
-# The unsuffixed client wheel can also be installed and owns the same library path.
-cp "$SITE_PACKAGES"/libcuopt_client.libs/libgomp-*.so* "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_mathopt_cu13.libs/libtbb-*.so* "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_mathopt_cu13.libs/libtbbmalloc-*.so* "$GAMSDIST/"
-cp "$CUOPT/lib64/libcudss_mtlayer_cuopt.so" "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_mathopt_cu13.libs/libcudart-*.so* "$GAMSDIST/"
+cp "$CUOPT/lib64/libcuopt_client.so" "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libgomp-*.so* "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libtbb-*.so* "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libtbbmalloc-*.so* "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt/lib64/libcudss_mtlayer_cuopt.so "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libcudart-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/rapids_logger/lib64/librapids_logger.so "$GAMSDIST/"
 cp "$SITE_PACKAGES"/librmm/lib64/librmm.so "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcudss.so* "$GAMSDIST/"
@@ -74,8 +69,7 @@ cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcublasLt.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcurand.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcusolver.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/cu13/lib/libcusparse.so* "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_client_cu13.libs/libcares-*.so* "$GAMSDIST/"
-cp "$SITE_PACKAGES"/libcuopt_client.libs/libcares-*.so* "$GAMSDIST/"
+cp "$SITE_PACKAGES"/libcuopt_cu13.libs/libcares-*.so* "$GAMSDIST/"
 cp "$SITE_PACKAGES"/nvidia/nccl/lib/libnccl.so* "$GAMSDIST/"
 
 # Copy assets (suppress errors if directory is empty or missing)
