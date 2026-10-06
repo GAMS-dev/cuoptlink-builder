@@ -8,6 +8,36 @@ You can get more details and tips by reading the blog post ["GPU-Accelerated Opt
 
 Supported model types are LP, MIP, RMIP, QCP, RMIQCP. QCP and RMIQCP models must be convex. Mixed-integer quadratic models (MIQCP) are not supported, since cuOpt's MIP solver only handles linear objectives and constraints.
 
+## Quickstart
+
+Install GAMSPy and the cuOpt link (including the CUDA runtime libraries) into GAMSPy's GAMS system directory:
+
+```bash
+pip install gamspy
+curl -O https://raw.githubusercontent.com/GAMS-dev/cuoptlink-builder/main/fetch-cuoptlink.py
+python fetch-cuoptlink.py install -g "$(gamspy show base)" --cuda-runtime
+```
+
+Then pick `cuopt` as solver:
+
+```python
+import gamspy as gp
+
+gp.set_options({"SOLVER_VALIDATION": 0})  # cuOpt is added to GAMSPy by hand
+
+m = gp.Container()
+x = gp.Variable(m, "x", type="positive")
+y = gp.Variable(m, "y", type="positive")
+e1 = gp.Equation(m, "e1", definition=x + 2 * y >= 2)
+e2 = gp.Equation(m, "e2", definition=3 * x + y >= 3)
+
+model = gp.Model(m, "demo", equations=[e1, e2], problem="LP", sense="min", objective=x + y)
+model.solve(solver="cuopt")
+print(model.objective_value)  # 1.4
+```
+
+For a standalone GAMS system pass its directory to `-g` instead and see [Test the setup](#test-the-setup). To try it without a local setup, open one of the [example notebooks](#notebooks) in Google Colab.
+
 ## Requirements
 
 - **Operating System:** Linux, Windows 11 through WSL2
