@@ -38,6 +38,10 @@ print(model.objective_value)  # 1.4
 
 For a standalone GAMS system pass its directory to `-g` instead and see [Test the setup](#test-the-setup). To try it without a local setup, open one of the [example notebooks](#notebooks) in Google Colab.
 
+## Performance
+
+cuOpt's GPU-based PDLP method pays off on large LPs. In NVIDIA's [benchmark on Mittelmann's LP test set](https://developer.nvidia.com/blog/accelerate-large-linear-programming-problems-with-nvidia-cuopt/) (October 2024, H100 SXM GPU, no presolve), cuOpt was faster than a state-of-the-art CPU LP solver on 60% of the instances, more than 10x faster on 20%, and up to 5000x faster on a large multi-commodity flow instance, while 8 of the 49 public instances hit the one-hour time limit. On small models the GPU overhead usually dominates, so compare on your own instances. The default `method 0` (concurrent) runs PDLP, dual simplex and barrier in parallel.
+
 ## Requirements
 
 - **Operating System:** Linux, Windows 11 through WSL2
