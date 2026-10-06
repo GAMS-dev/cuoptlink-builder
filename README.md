@@ -8,6 +8,40 @@ You can get more details and tips by reading the blog post ["GPU-Accelerated Opt
 
 Supported model types are LP, MIP, RMIP, QCP, RMIQCP. QCP and RMIQCP models must be convex. Mixed-integer quadratic models (MIQCP) are not supported, since cuOpt's MIP solver only handles linear objectives and constraints.
 
+## Quickstart
+
+Install GAMSPy and the cuOpt link (including the CUDA runtime libraries) into GAMSPy's GAMS system directory:
+
+```bash
+pip install gamspy
+curl -O https://raw.githubusercontent.com/GAMS-dev/cuoptlink-builder/main/fetch-cuoptlink.py
+python fetch-cuoptlink.py install -g "$(gamspy show base)" --cuda-runtime
+```
+
+Then pick `cuopt` as solver:
+
+```python
+import gamspy as gp
+
+gp.set_options({"SOLVER_VALIDATION": 0})  # cuOpt is added to GAMSPy by hand
+
+m = gp.Container()
+x = gp.Variable(m, "x", type="positive")
+y = gp.Variable(m, "y", type="positive")
+e1 = gp.Equation(m, "e1", definition=x + 2 * y >= 2)
+e2 = gp.Equation(m, "e2", definition=3 * x + y >= 3)
+
+model = gp.Model(m, "demo", equations=[e1, e2], problem="LP", sense="min", objective=x + y)
+model.solve(solver="cuopt")
+print(model.objective_value)  # 1.4
+```
+
+For a standalone GAMS system pass its directory to `-g` instead and see [Test the setup](#test-the-setup). To try it without a local setup, open one of the [example notebooks](#notebooks) in Google Colab.
+
+## Performance
+
+cuOpt's GPU-based PDLP method pays off on large LPs. In NVIDIA's [benchmark on Mittelmann's LP test set](https://developer.nvidia.com/blog/accelerate-large-linear-programming-problems-with-nvidia-cuopt/) (October 2024, H100 SXM GPU, no presolve), cuOpt was faster than a state-of-the-art CPU LP solver on 60% of the instances, more than 10x faster on 20%, and up to 5000x faster on a large multi-commodity flow instance, while 8 of the 49 public instances hit the one-hour time limit. On small models the GPU overhead usually dominates, so compare on your own instances. The default `method 0` (concurrent) runs PDLP, dual simplex and barrier in parallel.
+
 ## Requirements
 
 - **Operating System:** Linux, Windows 11 through WSL2
@@ -86,8 +120,10 @@ gams trnsport lp cuopt
 
 ### Notebooks
 
-- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb) for CUDA 12 on x86_64
-- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt_cu13.ipynb) for CUDA 13 on x86_64
+- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb) for CUDA 12 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GAMS-dev/cuoptlink-builder/blob/main/examples/trnsport_cuopt.ipynb)
+- [examples/trnsport_cuopt_cu13.ipynb](examples/trnsport_cuopt_cu13.ipynb) for CUDA 13 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GAMS-dev/cuoptlink-builder/blob/main/examples/trnsport_cuopt_cu13.ipynb)
+
+In Google Colab, select a GPU runtime first (*Runtime → Change runtime type*). If unsure, start with the CUDA 12 notebook, which also works with older NVIDIA drivers.
 
 ### GAMS models
 
