@@ -28,9 +28,9 @@ jobs:
         run: |
           mkdir -p venvs
           uv venv venvs/cu12
-          uv pip install --python venvs/cu12 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-cu12==26.10.0a223.post261002122804' -qq
+          uv pip install --python venvs/cu12 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-cu12==26.10.0a224.post261002130525' -qq
           uv venv venvs/cu13
-          uv pip install --python venvs/cu13 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-cu13==26.10.0a223.post261002122804' -qq
+          uv pip install --python venvs/cu13 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-cu13==26.10.0a224.post261002130525' -qq
 
       # Get GAMS (ARM64 version)
       - name: Download and extract latest GAMS distribution
