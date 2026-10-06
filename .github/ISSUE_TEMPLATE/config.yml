@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: GAMS forum
+    url: https://forum.gams.com/
+    about: Questions about modeling with GAMS or GAMSPy
+  - name: Security issue
+    url: https://github.com/GAMS-dev/cuoptlink-builder/blob/main/SECURITY.md
+    about: Please report security problems privately, not as a public issue
