@@ -63,7 +63,7 @@ python fetch-cuoptlink.py install -g /opt/gams/gams55.0 -c 12 -r v0.0.8
 python fetch-cuoptlink.py uninstall -g /opt/gams/gams55.0
 ```
 
-> **Note:** Successful installations automatically verify the solver link by running the GAMS `trnsport` test model with `solver=cuopt`.
+> **Note:** Successful installations automatically verify the solver link by solving a small embedded LP model with `solver=cuopt`.
 
 ## Manual installation
 

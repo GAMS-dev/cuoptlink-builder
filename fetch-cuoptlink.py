@@ -32,6 +32,17 @@ MANIFEST_FILE = ".cuopt_installed_files.txt"
 SOLVER_CONFIG_SECTION = "solverConfig"
 MARKER_BEGIN = f"# begin {SOLVER_NAME} solver configuration of cuoptlink"
 MARKER_END = f"# end {SOLVER_NAME} solver configuration of cuoptlink"
+# Embedded instead of fetched via gamslib, which GAMSPy's gamspy_base does not ship
+TEST_MODEL = """Positive Variable x, y;
+Variable z;
+Equation e1, e2, obj;
+e1.. x + 2*y =g= 2;
+e2.. 3*x + y =g= 3;
+obj.. z =e= x + y;
+Model m /all/;
+solve m using lp minimizing z;
+abort$(m.modelStat <> %modelStat.optimal%) 'cuOpt did not solve the test model to optimality', m.modelStat;
+"""
 
 
 def _get_manifest_path(gams_dir: str) -> str:
@@ -710,22 +721,17 @@ def _remove_cuopt_from_config(gams_dir: str) -> None:
 
 
 def _test_installation(gams_dir: str) -> None:
-    print("Testing installation with GAMS trnsport model...")
-    gamslib_bin = os.path.join(gams_dir, "gamslib")
+    print("Testing installation with a small LP model...")
     gams_bin = os.path.join(gams_dir, "gams")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            # Fetch model 1 (trnsport) using gamslib
-            subprocess.run(
-                [gamslib_bin, "-q", "1"],
-                cwd=temp_dir,
-                check=True,
-            )
+            with open(os.path.join(temp_dir, "cuopttest.gms"), "w", encoding="utf-8") as file:
+                file.write(TEST_MODEL)
 
             # Execute gams with cuopt solver
             subprocess.run(
-                [gams_bin, "trnsport", "solver=cuopt", "lo=0"],
+                [gams_bin, "cuopttest", "solver=cuopt", "lo=0"],
                 cwd=temp_dir,
                 check=True,
             )
