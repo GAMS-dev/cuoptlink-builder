@@ -116,8 +116,10 @@ gams trnsport lp cuopt
 
 ### Notebooks
 
-- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb) for CUDA 12 on x86_64
-- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt_cu13.ipynb) for CUDA 13 on x86_64
+- [examples/trnsport_cuopt.ipynb](examples/trnsport_cuopt.ipynb) for CUDA 12 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GAMS-dev/cuoptlink-builder/blob/main/examples/trnsport_cuopt.ipynb)
+- [examples/trnsport_cuopt_cu13.ipynb](examples/trnsport_cuopt_cu13.ipynb) for CUDA 13 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GAMS-dev/cuoptlink-builder/blob/main/examples/trnsport_cuopt_cu13.ipynb)
+
+In Google Colab, select a GPU runtime first (*Runtime → Change runtime type*). If unsure, start with the CUDA 12 notebook, which also works with older NVIDIA drivers.
 
 ### GAMS models
 
