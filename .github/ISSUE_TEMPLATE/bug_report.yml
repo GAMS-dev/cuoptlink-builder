@@ -1,0 +1,57 @@
+name: Bug report
+description: Wrong results, crashes or installation problems with the cuOpt link
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: A small GAMS or GAMSPy model and the options (e.g. `cuopt.opt`) that trigger the problem.
+    validations:
+      required: false
+  - type: input
+    id: release
+    attributes:
+      label: cuOpt link release
+      placeholder: e.g. v0.0.8e
+    validations:
+      required: true
+  - type: input
+    id: gams
+    attributes:
+      label: GAMS or GAMSPy version
+      placeholder: e.g. GAMS 54.5.0 or GAMSPy 1.28.1
+    validations:
+      required: true
+  - type: dropdown
+    id: cuda
+    attributes:
+      label: CUDA version of the link
+      options:
+        - CUDA 12
+        - CUDA 13
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: GPU, driver and OS
+      description: The output of `nvidia-smi` shows the GPU and driver version.
+      placeholder: e.g. NVIDIA L4, driver 580.65, Ubuntu 24.04 x86_64 (or WSL2)
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Solver log
+      description: The log of the solve, including the lines starting with `GAMS/cuOpt link was built against` and `cuOpt version`.
+      render: text
+    validations:
+      required: false
