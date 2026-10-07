@@ -8,8 +8,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-link:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     container:
       image: python:3.13
