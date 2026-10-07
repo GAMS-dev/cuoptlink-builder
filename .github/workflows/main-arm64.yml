@@ -28,9 +28,9 @@ jobs:
         run: |
           mkdir -p venvs
           uv venv venvs/cu12
-          uv pip install --python venvs/cu12 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-cu12==26.10.0a224.post261002130525' -qq
+          uv pip install --python venvs/cu12 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-mathopt-cu12==26.10.*' 'libcuopt-client==26.10.*' -qq
           uv venv venvs/cu13
-          uv pip install --python venvs/cu13 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-cu13==26.10.0a224.post261002130525' -qq
+          uv pip install --python venvs/cu13 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-mathopt-cu13==26.10.*' 'libcuopt-client==26.10.*' -qq
 
       # Get GAMS (ARM64 version)
       - name: Download and extract latest GAMS distribution
@@ -44,23 +44,25 @@ jobs:
       - name: Compile GAMS/cuOpt-link binary "gmscuopt.out" for CUDA 12 and then for CUDA 13
         run: |
           export GAMSCAPI="gamsdist/apifiles/C/api"
-          export CUOPT="venvs/cu12/lib/python3.13/site-packages/libcuopt"
+          export CUOPT="venvs/cu12/lib/python3.13/site-packages/libcuopt_mathopt"
           export JITLINK="venvs/cu12/lib/python3.13/site-packages/nvidia/nvjitlink/lib"
           export CUOPT_VERSION="`cat "$CUOPT/VERSION"`"
           export CUOPT_HASH="`cat "$CUOPT/GIT_COMMIT"`"
           gcc -Wall gmscuopt.c -o gmscuopt-cu12.out \
             -DCUOPT_VERSION=\"$CUOPT_VERSION\" -DCUOPT_HASH=\"$CUOPT_HASH\" \
             -I $GAMSCAPI $GAMSCAPI/gmomcc.c $GAMSCAPI/optcc.c $GAMSCAPI/gevmcc.c \
-            -I $CUOPT/include $JITLINK/libnvJitLink.so.12 -L $CUOPT/lib64 -lcuopt_mathopt
+            -I $CUOPT/include -I venvs/cu12/lib/python3.13/site-packages/libcuopt_client/include $JITLINK/libnvJitLink.so.12 -L $CUOPT/lib64 -lcuopt_mathopt \
+            -L venvs/cu12/lib/python3.13/site-packages/libcuopt_client/lib64 -lcuopt_client
           patchelf --set-rpath \$ORIGIN gmscuopt-cu12.out
-          export CUOPT="venvs/cu13/lib/python3.13/site-packages/libcuopt"
+          export CUOPT="venvs/cu13/lib/python3.13/site-packages/libcuopt_mathopt"
           export JITLINK="venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib"
           export CUOPT_VERSION="`cat "$CUOPT/VERSION"`"
           export CUOPT_HASH="`cat "$CUOPT/GIT_COMMIT"`"
           gcc -Wall gmscuopt.c -o gmscuopt-cu13.out \
             -DCUOPT_VERSION=\"$CUOPT_VERSION\" -DCUOPT_HASH=\"$CUOPT_HASH\" \
             -I $GAMSCAPI $GAMSCAPI/gmomcc.c $GAMSCAPI/optcc.c $GAMSCAPI/gevmcc.c \
-            -I $CUOPT/include $JITLINK/libnvJitLink.so.13 -L $CUOPT/lib64 -lcuopt_mathopt
+            -I $CUOPT/include -I venvs/cu13/lib/python3.13/site-packages/libcuopt_client/include $JITLINK/libnvJitLink.so.13 -L $CUOPT/lib64 -lcuopt_mathopt \
+            -L venvs/cu13/lib/python3.13/site-packages/libcuopt_client/lib64 -lcuopt_client
           patchelf --set-rpath \$ORIGIN gmscuopt-cu13.out
 
       # Collect dependencies for link and runtime convenience archive
@@ -69,13 +71,14 @@ jobs:
           mkdir release-cu12
           cp gmscuopt-cu12.out release-cu12/gmscuopt.out
           cp assets/* release-cu12/
-          cp venvs/cu12/lib/python3.13/site-packages/libcuopt/lib64/libcuopt_mathopt.so release-cu12/
-          cp venvs/cu12/lib/python3.13/site-packages/libcuopt/lib64/libcuopt_client.so release-cu12/
-          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_cu12.libs/libgomp-*.so* release-cu12/
-          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_cu12.libs/libtbb-*.so* release-cu12/
-          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_cu12.libs/libtbbmalloc-*.so* release-cu12/
-          cp venvs/cu12/lib/python3.13/site-packages/libcuopt/lib64/libcudss_mtlayer_cuopt.so release-cu12/
-          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_cu12.libs/libcudart-*.so* release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_mathopt/lib64/libcuopt_mathopt.so release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_client/lib64/libcuopt_client.so release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_mathopt_cu12.libs/libgomp-*.so* release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_client.libs/libgomp-*.so* release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_mathopt_cu12.libs/libtbb-*.so* release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_mathopt_cu12.libs/libtbbmalloc-*.so* release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_mathopt/lib64/libcudss_mtlayer_cuopt.so release-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_mathopt_cu12.libs/libcudart-*.so* release-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/rapids_logger/lib64/librapids_logger.so release-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/librmm/lib64/librmm.so release-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/nccl/lib/libnccl.so* release-cu12/
@@ -87,17 +90,18 @@ jobs:
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/nvjitlink/lib/libnvJitLink.so* runtime-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/curand/lib/libcurand.so* runtime-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/cusparse/lib/libcusparse.so* runtime-cu12/
-          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_cu12.libs/libcares-*.so* runtime-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/libcuopt_client.libs/libcares-*.so* runtime-cu12/
           mkdir release-cu13
           cp gmscuopt-cu13.out release-cu13/gmscuopt.out
           cp assets/* release-cu13/
-          cp venvs/cu13/lib/python3.13/site-packages/libcuopt/lib64/libcuopt_mathopt.so release-cu13/
-          cp venvs/cu13/lib/python3.13/site-packages/libcuopt/lib64/libcuopt_client.so release-cu13/
-          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libgomp-*.so* release-cu13/
-          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libtbb-*.so* release-cu13/
-          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libtbbmalloc-*.so* release-cu13/
-          cp venvs/cu13/lib/python3.13/site-packages/libcuopt/lib64/libcudss_mtlayer_cuopt.so release-cu13/
-          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libcudart-*.so* release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_mathopt/lib64/libcuopt_mathopt.so release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_client/lib64/libcuopt_client.so release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_mathopt_cu13.libs/libgomp-*.so* release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_client.libs/libgomp-*.so* release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_mathopt_cu13.libs/libtbb-*.so* release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_mathopt_cu13.libs/libtbbmalloc-*.so* release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_mathopt/lib64/libcudss_mtlayer_cuopt.so release-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_mathopt_cu13.libs/libcudart-*.so* release-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/rapids_logger/lib64/librapids_logger.so release-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/librmm/lib64/librmm.so release-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/nccl/lib/libnccl.so* release-cu13/
@@ -109,7 +113,7 @@ jobs:
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcurand.so* runtime-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcusolver.so* runtime-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcusparse.so* runtime-cu13/
-          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_cu13.libs/libcares-*.so* runtime-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/libcuopt_client.libs/libcares-*.so* runtime-cu13/
 
       # Upload artifacts
       - name: Upload CUDA 12 link artifact to GitHub Actions (always)

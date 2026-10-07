@@ -168,3 +168,5 @@ python3 tests/test-gamslib-cuopt.py -g <GAMS system directory> -j 2   # -g defau
 ```
 
 Use `-r` to change the time limit per model (default 120s; an optional fourth column in `tests/baseline.txt` sets a model-specific time limit instead), `-t` for the relative tolerance (default 1e-6) and pass model names to run only a subset. The exit code is 1 if any model mismatches or fails to produce a solution.
+
+To run it on a Colab GPU against a branch of this repository, use [`tests/colab-gpu-test.ipynb`](tests/colab-gpu-test.ipynb).
