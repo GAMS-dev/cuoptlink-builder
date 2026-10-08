@@ -86,6 +86,7 @@ barrier_initial_point_safeguard double 0 10 0 maxdouble 1 4 Controls the margin 
 barrier_presolve_bound_free_variables integer 0 -1 -1 1 1 4 Controls whether free variables are bounded during barrier presolve (-1 automatic, 0 off, 1 on)
 barrier_hyper_gpu_ruiz_nnz_threshold integer 0 500000 0 maxint 1 4 Controls the number of nonzeros (of A and Q) at or above which barrier Ruiz equilibration runs on the GPU instead of the CPU
 barrier_step_scale double 0 0.9 0.5 0.9999 1 4 Controls the scaling factor applied to the step size in the barrier method.
+postsolve_info integer 0 -1 -1 1 1 4 Controls whether the barrier method logs extra diagnostics after the solve, e.g. unscaled residual checks and postsolve reconstruction messages (-1 automatic/off, 0 off, 1 on)
 absolute_primal_tolerance double 0 0.0001 0 0.1 1 2 Controls the absolute primal tolerance used in PDLP's primal feasibility check
 relative_primal_tolerance double 0 0.0001 0 0.1 1 2 Controls the relative primal tolerance used in PDLP's primal feasibility check
 absolute_dual_tolerance double 0 0.0001 0 0.1 1 2 Controls the absolute dual tolerance used in PDLP's dual feasibility check
