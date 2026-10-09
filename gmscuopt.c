@@ -161,8 +161,6 @@ int main(int argc, char *argv[])
   cuopt_float_t* constraint_matrix_coefficent_values=NULL;
   cuopt_float_t* objective_coefficients=NULL;
   cuopt_float_t* rhs=NULL;
-  cuopt_float_t* constraint_lower_bounds=NULL;
-  cuopt_float_t* constraint_upper_bounds=NULL;
   cuopt_float_t* lower_bounds=NULL;
   cuopt_float_t* upper_bounds=NULL;
   char* constraint_sense=NULL;
@@ -452,8 +450,6 @@ int main(int argc, char *argv[])
     constraint_matrix_coefficent_values = malloc(nnz * sizeof(cuopt_float_t));
     objective_coefficients = malloc((num_variables) * sizeof(cuopt_float_t));
     rhs = malloc((num_linear_constraints) * sizeof(cuopt_float_t));
-    constraint_lower_bounds = malloc((num_linear_constraints) * sizeof(cuopt_float_t));
-    constraint_upper_bounds = malloc((num_linear_constraints) * sizeof(cuopt_float_t));
     lower_bounds = malloc((num_variables) * sizeof(cuopt_float_t));
     upper_bounds = malloc((num_variables) * sizeof(cuopt_float_t));
     constraint_sense = malloc((num_linear_constraints) * sizeof(char));
@@ -464,8 +460,6 @@ int main(int argc, char *argv[])
         (constraint_matrix_coefficent_values == NULL) ||
         (objective_coefficients == NULL) ||
         (rhs == NULL) ||
-        (constraint_lower_bounds == NULL) ||
-        (constraint_upper_bounds == NULL) ||
         (lower_bounds == NULL) ||
         (upper_bounds == NULL) ||
         (constraint_sense == NULL) ||
@@ -604,8 +598,6 @@ int main(int argc, char *argv[])
 
         constraint_sense[lin_row] = orig_sense[i];
         rhs[lin_row] = orig_rhs[i];
-        constraint_lower_bounds[lin_row] = (orig_sense[i] == CUOPT_LESS_THAN) ? -CUOPT_INFINITY : orig_rhs[i];
-        constraint_upper_bounds[lin_row] = (orig_sense[i] == CUOPT_GREATER_THAN) ? CUOPT_INFINITY : orig_rhs[i];
 
         nnz += rnz;
         lin_row++;
@@ -619,9 +611,7 @@ int main(int argc, char *argv[])
       goto DONE;
     }
 
-    // Ranged form, since cuOpt's multi-GPU PDLP (without presolve) ignores the row types + RHS
-    // form of cuOptCreateProblem and sees no constraints
-    status = cuOptCreateRangedProblem(
+    status = cuOptCreateProblem(
         num_linear_constraints, // Use mapped linear size
         num_variables,
         (gmoSense(gmo) == gmoObj_Min) ? CUOPT_MINIMIZE : CUOPT_MAXIMIZE,
@@ -630,8 +620,8 @@ int main(int argc, char *argv[])
         constraint_matrix_row_offsets,
         constraint_matrix_column_indices,
         constraint_matrix_coefficent_values,
-        constraint_lower_bounds,
-        constraint_upper_bounds,
+        constraint_sense,
+        rhs,
         lower_bounds,
         upper_bounds,
         variable_types,
@@ -1150,8 +1140,6 @@ DONE:
   free(constraint_matrix_coefficent_values);
   free(objective_coefficients);
   free(rhs);
-  free(constraint_lower_bounds);
-  free(constraint_upper_bounds);
   free(lower_bounds);
   free(upper_bounds);
   free(constraint_sense);
