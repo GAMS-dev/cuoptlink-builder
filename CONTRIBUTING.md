@@ -32,6 +32,8 @@ New or changed cuOpt options go into `assets/optcuopt.def` and have to be passed
 
 The GPU tests use the GAMS system found in your `PATH`, with the link installed.
 
+Without a local GPU, open `tests/colab-gpu-test.ipynb` in Google Colab with a GPU runtime: it builds the link from a branch the same way as CI, installs it into a fresh GAMS system and runs a `trnsport` smoke test and `tests/test-gamslib-cuopt.py`.
+
 ## Pull requests
 
 - Keep each pull request focused on one change and describe how you tested it.

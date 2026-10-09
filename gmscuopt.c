@@ -246,6 +246,13 @@ int main(int argc, char *argv[])
       goto DONE;
     }
   }
+  if (gevGetIntOpt(gev, gevNodeLim) > 0) { // GAMS nodlim=0 means no limit
+    status = cuOptSetIntegerParameter(settings, CUOPT_NODE_LIMIT, gevGetIntOpt(gev, gevNodeLim));
+    if (status != CUOPT_SUCCESS) {
+      printOut(gev, "Error setting node limit: %d\n", status);
+      goto DONE;
+    }
+  }
   if (gevGetDblOpt(gev, gevResLim) < RESLIM_INFINITY) {
     status = cuOptSetFloatParameter(settings, CUOPT_TIME_LIMIT, gevGetDblOpt(gev, gevResLim));
     if (status != CUOPT_SUCCESS) {
@@ -315,8 +322,19 @@ int main(int argc, char *argv[])
       printOut(gev, "Error querying method option.\n");
       goto DONE;
     }
+    cuopt_int_t num_gpus;
+    status = cuOptGetIntegerParameter(settings, CUOPT_NUM_GPUS, &num_gpus);
+    if (status != CUOPT_SUCCESS)
+    {
+      printOut(gev, "Error querying num_gpus option.\n");
+      goto DONE;
+    }
+    // multi-GPU PDLP rejects initial solutions
+    int multigpu_pdlp = chosen_method == CUOPT_METHOD_PDLP && (num_gpus == -1 || num_gpus > 1);
+    if (multigpu_pdlp && gmoHaveBasis(gmo))
+      printOut(gev, "Multi-GPU PDLP does not support initial solutions, ignoring the levels and marginals.\n");
     // only when some PDLP is used and we have basis
-    if ((chosen_method == CUOPT_METHOD_PDLP || chosen_method == CUOPT_METHOD_CONCURRENT) && gmoHaveBasis(gmo))
+    else if ((chosen_method == CUOPT_METHOD_PDLP || chosen_method == CUOPT_METHOD_CONCURRENT) && gmoHaveBasis(gmo))
     {
       int nvars = gmoN(gmo), nconstraints = gmoM(gmo);
       double *lvls = (double *)malloc(sizeof(double) * nvars);
@@ -856,6 +874,23 @@ int main(int argc, char *argv[])
   }
   gmoSetHeadnTail(gmo, gmoHresused, solution_time);
 
+  // Iterations and nodes; cuOpt only provides the MIP attributes for MIP solutions and the LP
+  // attributes for LP solutions (otherwise CUOPT_INVALID_ARGUMENT)
+  cuopt_int_t nodes = -1;
+#ifdef CUOPT_SOLUTION_ATTR_MIP_NUM_NODES
+  cuopt_int_t iterations = 0;
+  if (cuOptGetSolutionIntAttribute(solution, CUOPT_SOLUTION_ATTR_MIP_NUM_NODES, &nodes) == CUOPT_SUCCESS) {
+    gmoSetHeadnTail(gmo, gmoTmipnod, nodes);
+    if (cuOptGetSolutionIntAttribute(solution, CUOPT_SOLUTION_ATTR_MIP_NUM_SIMPLEX_ITERATIONS, &iterations) == CUOPT_SUCCESS)
+      gmoSetHeadnTail(gmo, gmoHiterused, iterations);
+  }
+  else {
+    nodes = -1;
+    if (cuOptGetSolutionIntAttribute(solution, CUOPT_SOLUTION_ATTR_LP_NUM_ITERATIONS, &iterations) == CUOPT_SUCCESS)
+      gmoSetHeadnTail(gmo, gmoHiterused, iterations);
+  }
+#endif
+
   int is_mip = has_integer_vars && (gmoModelType(gmo) == gmoProc_mip || gmoModelType(gmo) == gmoProc_miqcp);
   int have_solution = 0;
   int limit_point = 0; // continuous model stopped by an iteration/time limit
@@ -911,7 +946,7 @@ int main(int argc, char *argv[])
         // cuOpt does not expose the work units spent, so a set work limit is assumed to be the cause
         if (solution_time >= 0.99 * time_limit || work_limit < 1e10)
           gmoSolveStatSet(gmo, gmoSolveStat_Resource);
-        else if (node_limit < INT32_MAX)
+        else if (node_limit < INT32_MAX && (nodes < 0 || nodes >= node_limit)) // nodes < 0: unknown
           gmoSolveStatSet(gmo, gmoSolveStat_Iteration);
         else
           gmoSolveStatSet(gmo, gmoSolveStat_Solver);
@@ -1035,18 +1070,7 @@ int main(int argc, char *argv[])
         final_duals[i] = gams2cuopt_row ? raw_duals[gams2cuopt_row[i]] : raw_duals[i];
 
       cuopt_float_t *reduced_costs = malloc(num_variables * sizeof(cuopt_float_t));
-      if (obj_qnz == 0)
-      {
-        // cuOpt 26.08's PDLP returns all-zero reduced costs, so compute them for LPs from the
-        // duals as d = c - A^T y (exact for dual simplex and barrier as well). GMO's own
-        // computation (gmoSetSolution2) ignores c when the objective variable is eliminated.
-        status = gmoGetObjVector(gmo, reduced_costs, NULL);
-        for (int r = 0; r < num_constraints && !status; r++)
-          for (int k = constraint_matrix_row_offsets[r]; k < constraint_matrix_row_offsets[r + 1]; k++)
-            reduced_costs[constraint_matrix_column_indices[k]] -= constraint_matrix_coefficent_values[k] * raw_duals[r];
-      }
-      else
-        status = cuOptGetReducedCosts(solution, reduced_costs);
+      status = cuOptGetReducedCosts(solution, reduced_costs);
       if (status)
       {
         printOut(gev, "Error getting reduced costs: %d\n", status);
