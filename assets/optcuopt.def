@@ -44,13 +44,15 @@ iteration_limit integer 0 maxint 0 maxint 1 2 Controls the iteration limit after
 infeasibility_detection boolean 0 0 1 2 Controls whether PDLP should detect infeasibility
 strict_infeasibility boolean 0 0 1 2 Controls the strict infeasibility mode in PDLP
 crossover boolean 0 0 1 2 Controls whether PDLP should crossover to a basic solution after an optimal solution is found                  
-concurrent_nnz_cutoff integer 0 50000000 -1 maxint 1 2 Controls the reduced number of nonzeros at or above which barrier and dual simplex are skipped in concurrent mode (-1 disables the cutoff)
+large_nnz_threshold integer 0 50000000 -1 maxint 1 2 Controls the reduced number of nonzeros at or above which barrier and dual simplex are skipped in concurrent mode and automatic PDLP column reduction is enabled where supported (-1 disables both)
 primal_simplex_pricing enumint 0 1 1 2 Controls the pricing rule of the primal simplex method
  0 1 Dantzig pricing
  1 1 Devex pricing (default)
 dual_simplex_initial_perturbation integer 0 -1 -1 1 1 2 Controls whether the simplex method perturbs the problem initially (-1 automatic, 0 off, 1 on)
 dual_simplex_remove_perturbation integer 0 -1 -1 1 1 2 Controls whether the simplex method removes the perturbation (-1 automatic, 0 off, 1 on)
 pdlp_hyper_enable_curtis_reid_scaling boolean 0 1 1 2 Controls whether Curtis-Reid prescaling runs before Ruiz/Pock-Chambolle scaling in PDLP
+pdlp_hyper_reduced_matrix integer 0 -1 -1 1 1 2 Controls PDLP column reduction, which iterates on a reduced matrix with periodic full-problem refreshes (-1 automatic, at or above large_nnz_threshold, 0 off, 1 column reduction)
+pdlp_hyper_project_initial_primal integer 0 -1 -1 1 1 2 Controls whether PDLP projects the initial primal solution (the GAMS levels) onto the variable bounds (-1 pdlp_solver_mode preset, 0 off, 1 on)
 save_best_primal_so_far boolean 0 0 1 2 Controls whether PDLP should save the best primal solution so far   
 first_primal_feasible boolean 0 0 1 2 Controls whether PDLP should stop when the first primal feasible solution is found
 per_constraint_residual boolean 0 0 1 2 Controls whether PDLP should compute the primal & dual residual per constraint instead of globally
@@ -184,6 +186,7 @@ mip_hyper_submip_round_close_ratio double 0 0.8 0 1 1 3 Controls share of the st
 mip_hyper_block_bve boolean 0 1 1 3 Controls whether blocks of binaries are eliminated in cuOpt's MIP presolve (needs mip_probing)
 mip_hyper_presolve_indicator_strengthening boolean 0 1 1 3 Controls whether implied indicator rows are appended and capacity rows are lifted by their indicator before Papilo presolve (MIP only)
 mip_hyper_heuristic_presolve_max_rounds integer 0 -1 -1 maxint 1 3 Controls the Papilo presolve rounds cap in heuristics (<0 derives it from the problem, 0 keeps the Papilo default)
+mip_hyper_heuristic_papilo_probing_max_badgesize integer 0 -1 -1 maxint 1 3 Controls the ceiling on Papilo's probing minbadgesize in MIP presolve (<0 derives it from the problem, 0 leaves it uncapped)
 mip_hyper_diving_show_type boolean 0 0 1 3 log diving heuristic type when it finds a new incumbent
 mip_semi_continuous_big_m double 0 1e10 1 maxdouble 1 3 Controls the Big-M coefficient used when linearizing semi-continuous variable constraints
 
