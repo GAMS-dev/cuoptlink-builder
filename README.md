@@ -151,7 +151,7 @@ Various GAMS models can be found in subfolder `examples/models` and are used to 
 
 ### Regression tests
 
-The self-checking models in `examples/models/regression_tests` cover dual signs and reduced costs, QP/QCQP marginals, RMIQCP, option handling, error reporting, LP limit points, GMO handling (e.g. `=N=` rows, `requestMarginals=2`), rejection of unsupported features (SOS, semi-integer, MIQCP) and solve/model status mapping. Each model aborts if a result deviates from the reference values (obtained with CPLEX). Run them all against the GAMS system found in your `PATH` (it needs a GPU and the installed solver link):
+The self-checking models in `examples/models/regression_tests` cover dual signs and reduced costs, QP/QCQP marginals, RMIQCP, option handling, error reporting, LP limit points, PDLP column reduction and warm starts through LP presolve, GMO handling (e.g. `=N=` rows, `requestMarginals=2`), rejection of unsupported features (SOS, semi-integer, MIQCP) and solve/model status mapping. Each model aborts if a result deviates from the reference values (obtained with CPLEX). Run them all against the GAMS system found in your `PATH` (it needs a GPU and the installed solver link):
 
 ```
 examples/models/regression_tests/run_tests.sh
