@@ -42,7 +42,7 @@ pak          LP      1075.5471391775
 paklive      LP      19468.0876969476
 pdi          LP      294070
 port         LP      0.298363636363636
-poutil       MIP     266793
+poutil       MIP     266793  300
 prodmix      LP      18666.6666666667
 prodsch      MIP     3254.02381132426
 prodsp       LP      17869.0449355452

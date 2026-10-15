@@ -14,7 +14,7 @@ The link (`gmscuopt.c`) is built against the GAMS C API from a GAMS distribution
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install --extra-index-url=https://pypi.nvidia.com 'cuopt-cu13==26.8.*'
+.venv/bin/pip install 'libcuopt-mathopt-cu13==26.10.*' 'libcuopt-client==26.10.*'
 GAMSDIST=/path/to/gams ./build-link.sh
 ```
 
@@ -31,6 +31,8 @@ New or changed cuOpt options go into `assets/optcuopt.def` and have to be passed
 | `python3 tests/test-gamslib-cuopt.py` | Solves the models in `tests/baseline.txt` from the GAMS model library and compares the objectives with CPLEX | yes |
 
 The GPU tests use the GAMS system found in your `PATH`, with the link installed.
+
+Without a local GPU, open `tests/colab-gpu-test.ipynb` in Google Colab with a GPU runtime: it builds the link from a branch the same way as CI, installs it into a fresh GAMS system and runs a `trnsport` smoke test and `tests/test-gamslib-cuopt.py`.
 
 ## Pull requests
 

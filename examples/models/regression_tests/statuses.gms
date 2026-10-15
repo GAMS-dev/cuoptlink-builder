@@ -40,8 +40,9 @@ abort$(mInfMip.modelstat <> %modelStat.integerInfeasible% and mInfMip.modelstat 
 
 * --- MIP stopped by the time limit with an incumbent: solve status 3, model status 8
 * Market split instance (Cornuejols/Dawande): feasible incumbents are trivial, proving
-* optimality is very hard for branch-and-bound.
-Set i 'rows' /r1*r4/, j 'columns' /c1*c40/;
+* optimality is very hard for branch-and-bound. With n = 10(m-1) columns for m rows, an exact
+* split (objective 0) almost never exists, so the solve cannot end early by finding one.
+Set i 'rows' /r1*r6/, j 'columns' /c1*c50/;
 Parameter a(i,j), d(i);
 option seed = 12345;
 a(i,j) = uniformInt(0, 99);
