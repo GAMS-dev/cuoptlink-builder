@@ -92,7 +92,7 @@ You can also pass command-line arguments to automate installation and uninstalla
 python fetch-cuoptlink.py install --gams-dir /opt/gams/gams55.0_linux_x64_64_sfx --cuda-runtime
 
 # Specify a CUDA version and release tag explicitly
-python fetch-cuoptlink.py install -g /opt/gams/gams55.0 -c 12 -r v0.0.8
+python fetch-cuoptlink.py install -g /opt/gams/gams55.0 -c 12 -r v0.0.9
 
 # Uninstall the solver link from a GAMS system directory
 python fetch-cuoptlink.py uninstall -g /opt/gams/gams55.0
