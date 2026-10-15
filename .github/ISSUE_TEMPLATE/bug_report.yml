@@ -20,7 +20,7 @@ body:
     id: release
     attributes:
       label: cuOpt link release
-      placeholder: e.g. v0.0.8e
+      placeholder: e.g. v0.0.9
     validations:
       required: true
   - type: input
