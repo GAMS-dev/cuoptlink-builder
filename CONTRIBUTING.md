@@ -14,7 +14,7 @@ The link (`gmscuopt.c`) is built against the GAMS C API from a GAMS distribution
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install --extra-index-url=https://pypi.nvidia.com 'cuopt-cu13==26.8.*'
+.venv/bin/pip install 'libcuopt-mathopt-cu13==26.10.*' 'libcuopt-client==26.10.*'
 GAMSDIST=/path/to/gams ./build-link.sh
 ```
 
