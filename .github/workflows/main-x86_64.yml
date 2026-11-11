@@ -23,6 +23,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Run unit tests of the installer script fetch-cuoptlink.py
+        run: python3 tests/test-fetch-cuoptlink.py -v
+
       - name: Install dependencies
         run: |
           apt-get update && apt-get install -y patchelf curl unzip zip gcc

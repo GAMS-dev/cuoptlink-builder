@@ -834,6 +834,8 @@ def _install_command(args: argparse.Namespace) -> None:
     gams_dir = args.gams_dir
     if gams_dir is None:
         gams_dir = _prompt_gams_dir()
+    else:
+        gams_dir = os.path.abspath(os.path.expanduser(gams_dir))
     _execute_install(gams_dir, args.cuda_version, args.cuda_runtime, args.release)
 
 
@@ -841,6 +843,8 @@ def _uninstall_command(args: argparse.Namespace) -> None:
     gams_dir = args.gams_dir
     if gams_dir is None:
         gams_dir = _prompt_gams_dir()
+    else:
+        gams_dir = os.path.abspath(os.path.expanduser(gams_dir))
     _execute_uninstall(gams_dir)
 
 
