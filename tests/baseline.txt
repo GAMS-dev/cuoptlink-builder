@@ -5,7 +5,7 @@ bchtsp       MIP     78
 bid          MIP     15210109.512
 bidpwl       MIP     15210109.512
 china        LP      40561.5739263233
-clearlak     LP      93.75
+clearlak     LP      31.25
 coex         MIP     9
 coexx        MIP     4
 copper       MIP     71961.2247471606
