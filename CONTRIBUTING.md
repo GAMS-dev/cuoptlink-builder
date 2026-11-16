@@ -23,18 +23,6 @@ GAMSDIST=/path/to/gams ./build-link.sh
 
 `build-link.sh` compiles `gmscuopt.out` for CUDA 13, sets its RPATH (needs `gcc` and `patchelf`), and copies it together with the cuOpt and CUDA libraries and the files from `assets/` into `$GAMSDIST`. Since that includes `gamsconfig_cuopt.yaml`, merge it into `gamsconfig.yaml` as described in the [README](README.md#manual-installation). The CI workflows in `.github/workflows` build the release archives for CUDA 12 and 13 on x86_64 and arm64.
 
-This branch prepares the link for cuOpt 26.12 using prerelease wheels. After the
-release, remove the prerelease and extra-index flags from the commands above and
-both CI workflows, keeping the `26.12.*` version pins. Before publishing, build
-all four CUDA/architecture combinations and run the GPU regression tests against
-the released wheels.
-
-The option definitions were compared with `NVIDIA/cuopt` commit `d9c73c82`
-(version `26.12.00`). Options are forwarded by name and type, so the new cuDSS
-and branch-and-bound options need no changes to the C link. The legacy
-`mip_heuristics_only` and three `mip_hyper_heuristic_rins_*` options remain
-accepted for compatibility, but cuOpt 26.12 ignores them.
-
 New or changed cuOpt options go into `assets/optcuopt.def`. The loop in `gmscuopt.c` forwards solver options by name and type; options handled by the link itself need explicit C code.
 
 ## Testing
