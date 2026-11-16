@@ -18,6 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: python:3.13
+    env:
+      # cuOpt 26.12 nightly used while preparing the next release (same pin in both workflows).
+      # At release: set CUOPT_VERSION to the released version and delete the two UV_* lines.
+      CUOPT_VERSION: '26.12.0a93.post261116050548'
+      UV_PRERELEASE: allow
+      UV_EXTRA_INDEX_URL: https://pypi.anaconda.org/rapidsai-wheels-nightly/simple https://pypi.nvidia.com
 
     steps:
       - name: Checkout repository
@@ -31,16 +37,25 @@ jobs:
           apt-get update && apt-get install -y patchelf curl unzip zip gcc
           pip install uv
 
-      # Use cuOpt 26.12 nightlies while preparing for the next release.
-      # At release, remove the prerelease/index flags and keep the 26.12 pins.
       # Get CUDA runtimes via pip
       - name: Set up python virtual environments with NVIDIA dependencies for CUDA 12 and CUDA 13 (respectively)
         run: |
           mkdir -p venvs
           uv venv venvs/cu12
-          uv pip install --python venvs/cu12 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-mathopt-cu12==26.12.*' 'libcuopt-client==26.12.*' -qq
+          uv pip install --python venvs/cu12 "libcuopt-mathopt-cu12==$CUOPT_VERSION" "libcuopt-client==$CUOPT_VERSION" -qq
+          uv pip freeze --python venvs/cu12 | tee venvs/cu12-freeze.txt
           uv venv venvs/cu13
-          uv pip install --python venvs/cu13 --prerelease=allow --index-strategy unsafe-best-match --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple --extra-index-url=https://pypi.nvidia.com 'libcuopt-mathopt-cu13==26.12.*' 'libcuopt-client==26.12.*' -qq
+          uv pip install --python venvs/cu13 "libcuopt-mathopt-cu13==$CUOPT_VERSION" "libcuopt-client==$CUOPT_VERSION" -qq
+          uv pip freeze --python venvs/cu13 | tee venvs/cu13-freeze.txt
+
+      # Never publish release archives built from prerelease wheels
+      - name: Fail if a prerelease package would be released (only on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if grep -E '^[^=]+==[0-9.]*(a|b|rc|\.dev)[0-9]' venvs/cu12-freeze.txt venvs/cu13-freeze.txt; then
+            echo "Prerelease packages found; set CUOPT_VERSION to a released cuOpt version and remove the nightly UV_* settings."
+            exit 1
+          fi
 
       # Get GAMS
       - name: Download and extract latest GAMS distribution
