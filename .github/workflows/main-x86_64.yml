@@ -109,6 +109,7 @@ jobs:
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/nccl/lib/libnccl.so* release-cu12/
           mkdir runtime-cu12
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/cu12/lib/libcudss.so* runtime-cu12/
+          cp venvs/cu12/lib/python3.13/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc*.so* runtime-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/cusolver/lib/libcusolver.so* runtime-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/cublas/lib/libcublas.so* runtime-cu12/
           cp venvs/cu12/lib/python3.13/site-packages/nvidia/cublas/lib/libcublasLt.so* runtime-cu12/
@@ -132,6 +133,7 @@ jobs:
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/nccl/lib/libnccl.so* release-cu13/
           mkdir runtime-cu13
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcudss.so* runtime-cu13/
+          cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libnvrtc*.so* runtime-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libnvJitLink.so* runtime-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcublas.so* runtime-cu13/
           cp venvs/cu13/lib/python3.13/site-packages/nvidia/cu13/lib/libcublasLt.so* runtime-cu13/
