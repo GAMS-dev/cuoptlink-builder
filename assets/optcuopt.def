@@ -17,7 +17,7 @@ mip_probing boolean 0 1 1 1 Toggles the probing-cache step of cuOpt's internal M
 dual_postsolve boolean 0 1 1 2 Controls whether dual postsolve is enabled when using Papilo presolver for LP problems. Enabled by default for LP when Papilo presolve is selected.
 time_limit double 0 1e10 0 maxdouble 1 1 Controls the time limit in seconds after which the solver will stop and return the current solution (default GAMS ResLim)
 work_limit double 0 1e10 0 maxdouble 1 1 Controls the work limit (machine-independent measure of solver effort) after which the MIP solver will stop and return the current solution
-node_limit integer 0 maxint 0 maxint 1 1 Controls the maximum number of branch-and-bound nodes the MILP solver will explore before stopping and returning the current best feasible solution (if any).
+node_limit integer 0 maxint 0 maxint 1 1 Controls the maximum number of branch-and-bound nodes the MILP solver will explore before stopping and returning the current best feasible solution (if any) (default GAMS NodLim)
 prob_read string 1 "" 1 1 Reads a problem from an MPS file 
 solution_file string 0 "" 1 1 Name of a file where cuOpt should write the solution
 user_problem_file string 0 "" 1 1 Name of a file where cuOpt should write the user problem (MPS format)

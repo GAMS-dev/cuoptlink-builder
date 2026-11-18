@@ -23,7 +23,7 @@ GAMSDIST=/path/to/gams ./build-link.sh
 
 `build-link.sh` compiles `gmscuopt.out` for CUDA 13, sets its RPATH (needs `gcc` and `patchelf`), and copies it together with the cuOpt and CUDA libraries and the files from `assets/` into `$GAMSDIST`. Since that includes `gamsconfig_cuopt.yaml`, merge it into `gamsconfig.yaml` as described in the [README](README.md#manual-installation). The CI workflows in `.github/workflows` build the release archives for CUDA 12 and 13 on x86_64 and arm64.
 
-New or changed cuOpt options go into `assets/optcuopt.def`. The loop in `gmscuopt.c` forwards solver options by name and type; options handled by the link itself need explicit C code.
+New or changed cuOpt options go into `assets/optcuopt.def`. The loop in `gmscuopt.c` forwards solver options by name and type; options handled by the link itself need explicit C code. The option table of the cuOpt page in the GAMS documentation is generated from this file with `python3 optdef2md.py --source "GAMS-dev/cuoptlink-builder <release tag>"`, which writes `optcuopt_s.md` and records the release in its header.
 
 ## Testing
 
